@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && data.createdBy == request.auth.uid;
+    }
+
+    // Movie validation
+    function isValidMovie(data) {
+      return data.keys().hasAll(['title', 'videoUrl', 'thumbnailUrl', 'createdAt', 'createdBy']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.videoUrl is string && data.videoUrl.size() > 0 && data.videoUrl.size() <= 1000 &&
+             data.thumbnailUrl is string && data.thumbnailUrl.size() > 0 && data.thumbnailUrl.size() <= 1000 &&
+             data.createdAt == request.time &&
+             data.createdBy == request.auth.uid;
+    }
+
+    match /movies/{movieId} {
+      allow read: if true; // Allow anyone to see movies
+      
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(movieId) && isValidMovie(incoming());
+      
+      allow update: if isOwner(existing()) && isEmailVerified() && 
+                    isValidMovie(incoming()) &&
+                    incoming().createdBy == existing().createdBy &&
+                    incoming().createdAt == existing().createdAt;
+                    
+      allow delete: if isOwner(existing()) && isEmailVerified();
+    }
+  }
+}

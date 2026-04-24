@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "Movie": {
+      "title": "Movie",
+      "description": "A movie entry in the streaming platform",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "duration": { "type": "string" },
+        "year": { "type": "string" },
+        "rating": { "type": "string" },
+        "genre": { "type": "array" },
+        "cast": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["title", "videoUrl", "thumbnailUrl"]
+    }
+  },
+  "firestore": {
+    "/movies/{movieId}": {
+      "schema": "Movie",
+      "description": "Collection of movies"
+    }
+  }
+}
