@@ -141,15 +141,30 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
 
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => onPlay(movie)}
+                  onClick={() => {
+                    if (movie.contentType === 'tv' && movie.episodes && movie.episodes.length > 0) {
+                      const firstEp = movie.episodes[0];
+                      onPlay({ 
+                        ...movie, 
+                        videoUrl: firstEp.videoUrl, 
+                        title: `${movie.title} - ${firstEp.title}` 
+                      });
+                    } else {
+                      onPlay(movie);
+                    }
+                  }}
                   className="flex items-center justify-center gap-2 bg-white text-black px-8 py-3 rounded hover:bg-white/80 transition-colors font-bold text-lg shadow-lg"
                 >
-                  <Play size={24} fill="black" /> Play
+                  <Play size={24} fill="black" /> {movie.contentType === 'tv' ? 'S1:E1 Play' : 'Play'}
                 </button>
                 <button 
                   onClick={() => {
+                    const videoUrlToDownload = movie.contentType === 'tv' && movie.episodes && movie.episodes.length > 0
+                      ? movie.episodes[0].videoUrl
+                      : movie.videoUrl;
+                    
                     const link = document.createElement('a');
-                    link.href = movie.videoUrl;
+                    link.href = videoUrlToDownload;
                     link.download = movie.title;
                     document.body.appendChild(link);
                     link.click();
@@ -189,7 +204,9 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
                 <span className="text-gray-400">{movie.year}</span>
                 <span className="border border-gray-500 px-1.5 py-0.5 rounded text-xs text-zinc-100 bg-zinc-800">{movie.rating}</span>
                 <span className="text-gray-400">{movie.duration}</span>
-                <span className="border border-gray-700 px-1.5 py-0.5 rounded text-[10px] text-gray-400 font-black tracking-widest uppercase">4K Ultra HD</span>
+                <span className="border border-gray-700 px-1.5 py-0.5 rounded text-[10px] text-gray-400 font-black tracking-widest uppercase">
+                  {movie.contentType === 'tv' ? 'HD' : '4K Ultra HD'}
+                </span>
               </div>
               
               <p className="text-lg text-gray-200 leading-relaxed font-medium">
@@ -207,11 +224,49 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
                 <span className="text-gray-300">{movie.genres.join(', ')}</span>
               </div>
               <div>
-                <span className="text-gray-500 font-bold">This movie is: </span>
+                <span className="text-gray-500 font-bold">This {movie.contentType === 'tv' ? 'show' : 'movie'} is: </span>
                 <span className="text-gray-300">Exciting, Emotional, Visionary</span>
               </div>
             </div>
           </div>
+
+          {/* Episode List for TV Shows */}
+          {movie.contentType === 'tv' && movie.episodes && movie.episodes.length > 0 && (
+            <div className="px-8 pb-12 border-t border-zinc-800 pt-8">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-bold text-white">Episodes</h3>
+                <span className="text-gray-400 font-bold">{movie.duration}</span>
+              </div>
+              <div className="space-y-4">
+                {movie.episodes.map((episode) => (
+                  <div 
+                    key={episode.id}
+                    className="group flex flex-col md:flex-row items-start md:items-center gap-6 p-4 rounded-lg bg-zinc-800/20 border border-transparent hover:bg-zinc-800/40 hover:border-white/10 transition-all cursor-pointer"
+                    onClick={() => onPlay({ ...movie, videoUrl: episode.videoUrl, title: `${movie.title} - ${episode.title}` })}
+                  >
+                    <div className="text-2xl font-black text-gray-600 group-hover:text-white transition-colors w-8 text-center shrink-0">
+                      {episode.number}
+                    </div>
+                    <div className="relative w-full md:w-40 aspect-video rounded-md overflow-hidden bg-zinc-800 flex-shrink-0">
+                       <img src={episode.thumbnailUrl || movie.thumbnailUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Play size={32} fill="white" className="text-white" />
+                       </div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-white group-hover:text-netflix-red transition-colors">{episode.title}</h4>
+                        <span className="text-sm text-gray-500 font-medium">{episode.duration}</span>
+                      </div>
+                      <p className="text-sm text-gray-400 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                        {episode.description || `Chapter ${episode.number} of ${movie.title}.`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>

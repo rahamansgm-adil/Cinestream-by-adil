@@ -1,3 +1,13 @@
+export interface Episode {
+  id: string;
+  number: number;
+  title: string;
+  description: string;
+  videoUrl: string;
+  duration: string;
+  thumbnailUrl?: string;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -12,6 +22,8 @@ export interface Movie {
   rating: string;
   genres: string[];
   cast: string[];
+  contentType?: 'movie' | 'tv';
+  episodes?: Episode[];
 }
 
 export const MOVIES: Movie[] = [];

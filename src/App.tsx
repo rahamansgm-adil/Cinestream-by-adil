@@ -6,6 +6,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, LogIn, LogOut, Plus } from 'lucide-react';
+import { cn } from './lib/utils';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import MovieRow from './components/MovieRow';
@@ -22,7 +23,7 @@ export default function App() {
   const [dbMovies, setDbMovies] = useState<Movie[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [playingMovie, setPlayingMovie] = useState<Movie | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [activeAddForm, setActiveAddForm] = useState<'movie' | 'tv' | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -38,7 +39,11 @@ export default function App() {
       m.title.toLowerCase().includes(query) ||
       m.description.toLowerCase().includes(query) ||
       m.genres.some(g => g.toLowerCase().includes(query)) ||
-      m.cast.some(c => c.toLowerCase().includes(query))
+      m.cast.some(c => c.toLowerCase().includes(query)) ||
+      (m.contentType === 'tv' && m.episodes?.some(ep => 
+        ep.title.toLowerCase().includes(query) ||
+        ep.description.toLowerCase().includes(query)
+      ))
     );
   }, [dbMovies, movies, searchQuery]);
 
@@ -132,7 +137,8 @@ export default function App() {
   return (
     <div className="relative min-h-screen bg-netflix-black text-white">
       <Navbar 
-        onAddClick={() => setShowAddForm(true)} 
+        onAddMovieClick={() => setActiveAddForm('movie')} 
+        onAddTVShowClick={() => setActiveAddForm('tv')}
         user={user}
         onLogin={signInWithGoogle}
         onLogout={() => signOut(auth)}
@@ -143,13 +149,15 @@ export default function App() {
       <main className="pb-40">
         {!searchQuery ? (
           <>
-            <Hero 
-              movie={featuredMovie} 
-              onPlay={handlePlay} 
-              onMoreInfo={setSelectedMovie} 
-            />
+            {featuredMovie && (
+              <Hero 
+                movie={featuredMovie} 
+                onPlay={handlePlay} 
+                onMoreInfo={setSelectedMovie} 
+              />
+            )}
     
-            <div className="relative z-10 pb-20">
+            <div className={cn("relative z-10 pb-20", !featuredMovie && "pt-32")}>
               {CATEGORIES.map((category) => (
                 <MovieRow 
                   key={category.id}
@@ -159,11 +167,20 @@ export default function App() {
                 />
               ))}
               
-              {dbMovies.length > 0 && (
+              {dbMovies.filter(m => m.contentType === 'tv').length > 0 && (
+                <MovieRow 
+                  key="tv-shows-community"
+                  title="TV Shows"
+                  movies={dbMovies.filter(m => m.contentType === 'tv')}
+                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                />
+              )}
+
+              {dbMovies.filter(m => m.contentType !== 'tv').length > 0 && (
                 <MovieRow 
                   key="added-by-community"
                   title="Community Picks"
-                  movies={dbMovies}
+                  movies={dbMovies.filter(m => m.contentType !== 'tv')}
                   onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
                 />
               )}
@@ -226,12 +243,13 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Admin Add Movie Form Modal */}
+      {/* Admin Add Movie / TV Show Form Modal */}
       <AnimatePresence>
-        {showAddForm && (
+        {activeAddForm && (
           <AddMovieForm 
+            type={activeAddForm}
             onAdd={handleAddMovie}
-            onClose={() => setShowAddForm(false)}
+            onClose={() => setActiveAddForm(null)}
           />
         )}
       </AnimatePresence>

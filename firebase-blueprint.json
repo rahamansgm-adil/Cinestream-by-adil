@@ -1,23 +1,39 @@
 {
   "entities": {
     "Movie": {
-      "title": "Movie",
-      "description": "A movie entry in the streaming platform",
+      "title": "Movie or TV Show",
+      "description": "A movie or TV show entry in the streaming platform",
       "type": "object",
       "properties": {
         "title": { "type": "string" },
         "description": { "type": "string" },
         "thumbnailUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
         "videoUrl": { "type": "string" },
         "duration": { "type": "string" },
         "year": { "type": "string" },
         "rating": { "type": "string" },
-        "genre": { "type": "array" },
-        "cast": { "type": "array" },
+        "genres": { "type": "array", "items": { "type": "string" } },
+        "cast": { "type": "array", "items": { "type": "string" } },
+        "contentType": { "type": "string", "enum": ["movie", "tv"] },
+        "episodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "number": { "type": "number" },
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "videoUrl": { "type": "string" },
+              "duration": { "type": "string" }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },
-      "required": ["title", "videoUrl", "thumbnailUrl"]
+      "required": ["title", "thumbnailUrl", "contentType"]
     }
   },
   "firestore": {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, X, Check, AlertCircle, Play, Plus, Info, Loader2 } from 'lucide-react';
-import { Movie } from '@/src/data/movies';
+import { Upload, X, Check, AlertCircle, Play, Plus, Info, Loader2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Movie, Episode } from '@/src/data/movies';
 import { cn } from '@/src/lib/utils';
 import { db, auth } from '@/src/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -9,9 +9,10 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 interface AddMovieFormProps {
   onAdd: (movie: Movie) => void;
   onClose: () => void;
+  type?: 'movie' | 'tv';
 }
 
-export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) => {
+export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type = 'movie' }) => {
   const [formData, setFormData] = useState<Partial<Movie>>({
     title: '',
     description: '',
@@ -24,14 +25,26 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) =>
     trailerUrl: '',
     logoUrl: '',
     genres: [],
-    cast: []
+    cast: [],
+    contentType: type,
+    episodes: []
+  });
+
+  const [episodes, setEpisodes] = useState<Partial<Episode>[]>([]);
+  const [showEpisodeForm, setShowEpisodeForm] = useState(false);
+  const [newEpisode, setNewEpisode] = useState<Partial<Episode>>({
+    title: '',
+    description: '',
+    videoUrl: '',
+    duration: '',
+    number: 1
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [genreInput, setGenreInput] = useState('');
-  const [castInput, setCastInput] = useState('');
+  const [contentGenreInput, setContentGenreInput] = useState('');
+  const [contentCastInput, setContentCastInput] = useState('');
 
   const isAdmin = auth.currentUser?.email === 'rahamansgmadil2@gmail.com';
 
@@ -44,20 +57,26 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) =>
     if (!formData.description) newErrors.description = 'Description is required';
     if (!formData.thumbnailUrl) newErrors.thumbnailUrl = 'Thumbnail URL is required';
     if (!formData.bannerUrl) newErrors.bannerUrl = 'Banner URL is required';
-    if (!formData.videoUrl) newErrors.videoUrl = 'Video URL is required';
     
-    // Updated validation for .mkv, .mp4, and .m3u8 or Google Drive / Archive.org
-    const videoUrl = formData.videoUrl || '';
-    const isDriveUrl = videoUrl.includes('drive.google.com/uc?export=download&id=') || videoUrl.includes('drive.google.com/file/d/');
-    const isArchiveUrl = videoUrl.includes('archive.org/');
-    const isValidFormat = videoUrl.endsWith('.m3u8') || videoUrl.endsWith('.mp4') || videoUrl.endsWith('.mkv') || isDriveUrl || isArchiveUrl;
-    
-    if (videoUrl && !isValidFormat) {
-      newErrors.videoUrl = 'Unsupported format. Use .mp4, .m3u8, .mkv, Google Drive or Archive.org link';
-    }
-    
-    if (isArchiveUrl && (videoUrl.includes('/details/') || videoUrl.includes('/metadata/'))) {
-      newErrors.videoUrl = 'Please use the DIRECT download link (ending in .mp4 or .mkv) from the Archive.org sidebar.';
+    if (formData.contentType === 'movie') {
+      if (!formData.videoUrl) newErrors.videoUrl = 'Video URL is required';
+      
+      const videoUrl = formData.videoUrl || '';
+      const isDriveUrl = videoUrl.includes('drive.google.com/uc?export=download&id=') || videoUrl.includes('drive.google.com/file/d/');
+      const isArchiveUrl = videoUrl.includes('archive.org/');
+      const isValidFormat = videoUrl.endsWith('.m3u8') || videoUrl.endsWith('.mp4') || videoUrl.endsWith('.mkv') || isDriveUrl || isArchiveUrl;
+      
+      if (videoUrl && !isValidFormat) {
+        newErrors.videoUrl = 'Unsupported format. Use .mp4, .m3u8, .mkv, Google Drive or Archive.org link';
+      }
+      
+      if (isArchiveUrl && (videoUrl.includes('/details/') || videoUrl.includes('/metadata/'))) {
+        newErrors.videoUrl = 'Please use the DIRECT download link (ending in .mp4 or .mkv) from the Archive.org sidebar.';
+      }
+    } else {
+      if (episodes.length === 0) {
+        newErrors.episodes = 'At least one episode is required for TV Shows';
+      }
     }
     
     if (!formData.duration) newErrors.duration = 'Duration is required';
@@ -85,14 +104,20 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) =>
           description: formData.description,
           thumbnailUrl: formData.thumbnailUrl,
           bannerUrl: formData.bannerUrl,
-          videoUrl: formData.videoUrl,
+          videoUrl: formData.contentType === 'movie' ? (formData.videoUrl || '') : (episodes[0]?.videoUrl || ''),
           year: formData.year,
           rating: formData.rating,
           duration: formData.duration,
           trailerUrl: formData.trailerUrl || '',
           logoUrl: formData.logoUrl || '',
-          genres: genreInput.split(',').map(g => g.trim()).filter(Boolean),
-          cast: castInput.split(',').map(c => c.trim()).filter(Boolean),
+          genres: contentGenreInput.split(',').map(g => g.trim()).filter(Boolean),
+          cast: contentCastInput.split(',').map(c => c.trim()).filter(Boolean),
+          contentType: formData.contentType,
+          episodes: formData.contentType === 'tv' ? episodes.map((ep, idx) => ({
+            ...ep,
+            id: ep.id || `ep-${Date.now()}-${idx}`,
+            number: ep.number || idx + 1
+          })) : [],
           createdAt: serverTimestamp(),
           createdBy: auth.currentUser.uid
         };
@@ -126,7 +151,7 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) =>
         {/* Form Section */}
         <div className="flex-1 p-8 md:p-12 overflow-y-auto max-h-[80vh] md:max-h-none">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-black text-white tracking-tighter uppercase">Add New Content</h2>
+            <h2 className="text-3xl font-black text-white tracking-tighter uppercase">Add New {type === 'movie' ? 'Movie' : 'TV Show'}</h2>
             <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full transition-colors">
               <X size={24} />
             </button>
@@ -136,10 +161,10 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) =>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Title */}
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Movie Title</label>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Title</label>
                 <input 
                   type="text"
-                  placeholder="e.g. Inception"
+                  placeholder={formData.contentType === 'movie' ? "e.g. Inception" : "e.g. Stranger Things"}
                   className={cn(
                     "w-full bg-zinc-800/50 border-b-2 border-transparent px-4 py-3 text-white outline-none focus:border-netflix-red transition-all duration-300 rounded-t",
                     errors.title && "border-red-500"
@@ -173,60 +198,165 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) =>
                     <option value="PG-13">PG-13</option>
                     <option value="R">R</option>
                     <option value="TV-MA">TV-MA</option>
+                    <option value="TV-14">TV-14</option>
                   </select>
                 </div>
               </div>
 
-              {/* Media URLs */}
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Video URL (.m3u8, .mp4, .mkv, Google Drive)</label>
-                <input 
-                  type="text"
-                  placeholder="https://drive.google.com/uc?export=download&id=..."
-                  className={cn(
-                    "w-full bg-zinc-800/50 border-b-2 border-transparent px-4 py-3 text-white outline-none focus:border-netflix-red transition-all duration-300 rounded-t",
-                    errors.videoUrl && "border-red-500"
-                  )}
-                  value={formData.videoUrl}
-                  onChange={e => setFormData({ ...formData, videoUrl: e.target.value })}
-                />
-                <AnimatePresence>
-                  {isMkvDetected && (
-                    <motion.p 
-                      key="mkv-warning"
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="text-amber-500 text-[10px] flex items-center gap-1 font-bold uppercase tracking-wider"
+              {/* Movie-only: Video URL */}
+              {formData.contentType === 'movie' && (
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Video URL (.m3u8, .mp4, .mkv, Google Drive)</label>
+                  <input 
+                    type="text"
+                    placeholder="https://drive.google.com/uc?export=download&id=..."
+                    className={cn(
+                      "w-full bg-zinc-800/50 border-b-2 border-transparent px-4 py-3 text-white outline-none focus:border-netflix-red transition-all duration-300 rounded-t",
+                      errors.videoUrl && "border-red-500"
+                    )}
+                    value={formData.videoUrl}
+                    onChange={e => setFormData({ ...formData, videoUrl: e.target.value })}
+                  />
+                  <AnimatePresence>
+                    {isMkvDetected && (
+                      <motion.p 
+                        key="mkv-warning"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="text-amber-500 text-[10px] flex items-center gap-1 font-bold uppercase tracking-wider"
+                      >
+                        <AlertCircle size={10} /> MKV format detected. Note: This format may require backend transcoding for universal browser playback.
+                      </motion.p>
+                    )}
+                    {isDriveDetected && (
+                      <motion.p 
+                        key="drive-warning"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="text-blue-500 text-[10px] flex items-center gap-1 font-bold uppercase tracking-wider"
+                      >
+                        <Check size={10} /> Google Drive detected. Using backend proxy for seamless streaming.
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                  {errors.videoUrl && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={12}/> {errors.videoUrl}</p>}
+                </div>
+              )}
+
+              {/* TV-only: Episode Management */}
+              {formData.contentType === 'tv' && (
+                <div className="md:col-span-2 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Episodes ({episodes.length})</label>
+                    <button 
+                      type="button"
+                      onClick={() => setShowEpisodeForm(!showEpisodeForm)}
+                      className="text-netflix-red text-xs font-bold uppercase tracking-widest flex items-center gap-1 hover:underline"
                     >
-                      <AlertCircle size={10} /> MKV format detected. Note: This format may require backend transcoding for universal browser playback.
-                    </motion.p>
-                  )}
-                  {isDriveDetected && (
-                    <motion.p 
-                      key="drive-warning"
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="text-blue-500 text-[10px] flex items-center gap-1 font-bold uppercase tracking-wider"
+                      {showEpisodeForm ? <ChevronUp size={14} /> : <Plus size={14} />} 
+                      {showEpisodeForm ? 'Close' : 'Add Episode'}
+                    </button>
+                  </div>
+
+                  {showEpisodeForm && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-zinc-800/30 p-6 rounded-lg border border-zinc-700 space-y-4 overflow-hidden"
                     >
-                      <Check size={10} /> Google Drive detected. Using backend proxy for seamless streaming.
-                    </motion.p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Episode Title</label>
+                          <input 
+                            type="text"
+                            placeholder="e.g. Chapter One: The Vanishing..."
+                            className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                            value={newEpisode.title}
+                            onChange={e => setNewEpisode({ ...newEpisode, title: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Episode URL</label>
+                          <input 
+                            type="text"
+                            placeholder="Direct Video URL"
+                            className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                            value={newEpisode.videoUrl}
+                            onChange={e => setNewEpisode({ ...newEpisode, videoUrl: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Duration</label>
+                          <input 
+                            type="text"
+                            placeholder="e.g. 45m"
+                            className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                            value={newEpisode.duration}
+                            onChange={e => setNewEpisode({ ...newEpisode, duration: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Episode Number</label>
+                          <input 
+                            type="number"
+                            className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                            value={newEpisode.number}
+                            onChange={e => setNewEpisode({ ...newEpisode, number: parseInt(e.target.value) })}
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Summary</label>
+                          <textarea 
+                            rows={2}
+                            placeholder="Brief episode description..."
+                            className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all resize-none"
+                            value={newEpisode.description}
+                            onChange={e => setNewEpisode({ ...newEpisode, description: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (newEpisode.title && newEpisode.videoUrl) {
+                            setEpisodes([...episodes, { ...newEpisode, id: Date.now().toString() }]);
+                            setNewEpisode({ title: '', description: '', videoUrl: '', duration: '', number: (newEpisode.number || 0) + 1 });
+                            if (episodes.length > 0) setShowEpisodeForm(false);
+                          }
+                        }}
+                        className="w-full py-2 bg-white text-black font-bold uppercase text-[10px] tracking-widest rounded hover:bg-gray-200 transition-colors"
+                      >
+                        Add to Episode List
+                      </button>
+                    </motion.div>
                   )}
-                  {isArchiveDetected && (
-                    <motion.p 
-                      key="archive-warning"
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="text-green-500 text-[10px] flex items-center gap-1 font-bold uppercase tracking-wider"
-                    >
-                      <Check size={10} /> Internet Archive detected. This source supports native seeking and CORS.
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-                {errors.videoUrl && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={12}/> {errors.videoUrl}</p>}
-              </div>
+
+                  <div className="space-y-2">
+                    {episodes.map((ep, idx) => (
+                      <div key={ep.id} className="flex items-center justify-between p-3 bg-zinc-800/50 rounded border border-white/5 group hover:border-white/20 transition-all">
+                        <div className="flex items-center gap-4">
+                          <span className="text-netflix-red font-black text-sm w-6">{ep.number}</span>
+                          <div>
+                            <h4 className="text-sm font-bold text-white">{ep.title}</h4>
+                            <p className="text-[10px] text-gray-500 truncate max-w-[200px] md:max-w-md">{ep.description || 'No description'}</p>
+                          </div>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => setEpisodes(episodes.filter((_, i) => i !== idx))}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-gray-500 hover:text-red-500 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                    {errors.episodes && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={12}/> {errors.episodes}</p>}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Thumbnail Image URL</label>
@@ -293,16 +423,16 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose }) =>
                   type="text"
                   placeholder="Action, Sci-Fi"
                   className="w-full bg-zinc-800/50 border-b-2 border-transparent px-4 py-3 text-white outline-none focus:border-netflix-red transition-all duration-300 rounded-t"
-                  value={genreInput}
-                  onChange={e => setGenreInput(e.target.value)}
+                  value={contentGenreInput}
+                  onChange={e => setContentGenreInput(e.target.value)}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Duration</label>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">{formData.contentType === 'movie' ? 'Duration' : 'Total Seasons / Info'}</label>
                 <input 
                   type="text"
-                  placeholder="e.g. 2h 15m"
+                  placeholder={formData.contentType === 'movie' ? "e.g. 2h 15m" : "e.g. 3 Seasons"}
                   className="w-full bg-zinc-800/50 border-b-2 border-transparent px-4 py-3 text-white outline-none focus:border-netflix-red transition-all duration-300 rounded-t"
                   value={formData.duration}
                   onChange={e => setFormData({ ...formData, duration: e.target.value })}

@@ -16,8 +16,10 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
 
   useEffect(() => {
     setShowTrailer(false);
+    if (!movie?.trailerUrl) return;
+
     const timer = setTimeout(() => {
-      if (movie.trailerUrl) {
+      if (movie?.trailerUrl) {
         setShowTrailer(true);
       }
     }, 4000); // 4 second delay
@@ -32,6 +34,33 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const handlePlayClick = () => {
+    if (movie.contentType === 'tv' && movie.episodes && movie.episodes.length > 0) {
+      // Play first episode
+      const firstEpisode = movie.episodes[0];
+      onPlay({ 
+        ...movie, 
+        videoUrl: firstEpisode.videoUrl, 
+        title: `${movie.title} - ${firstEpisode.title}` 
+      });
+    } else {
+      onPlay(movie);
+    }
+  };
+
+  const handleDownload = () => {
+    const videoUrl = movie.contentType === 'tv' && movie.episodes && movie.episodes.length > 0 
+      ? movie.episodes[0].videoUrl 
+      : movie.videoUrl;
+    
+    const link = document.createElement('a');
+    link.href = videoUrl;
+    link.download = movie.title;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -85,6 +114,20 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
 
       {/* Content */}
       <div className="relative z-10 max-w-xl">
+        <motion.div
+           initial={{ opacity: 0, y: 20 }}
+           animate={{ opacity: 1, y: 0 }}
+           transition={{ duration: 0.8 }}
+           className="flex items-center gap-2 mb-4"
+        >
+          {movie.contentType === 'tv' && (
+            <span className="px-2 py-0.5 bg-white/20 backdrop-blur-md rounded text-[10px] font-black tracking-widest text-white uppercase border border-white/10">
+              TV SHOW
+            </span>
+          )}
+          <span className="text-gray-400 text-sm font-bold tracking-widest">{movie.year}</span>
+        </motion.div>
+
         <motion.h1 
           className="text-5xl md:text-7xl font-bold mb-4 tracking-tight text-white uppercase"
           initial={{ opacity: 0, y: 20 }}
@@ -110,20 +153,13 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
           transition={{ duration: 0.8, delay: 0.4 }}
         >
           <button 
-            onClick={() => onPlay(movie)}
+            onClick={handlePlayClick}
             className="flex items-center justify-center gap-2 bg-white text-black px-8 py-3 rounded hover:bg-white/90 transition-colors font-bold shadow-lg"
           >
-            <Play size={24} fill="black" /> Play
+            <Play size={24} fill="black" /> {movie.contentType === 'tv' ? 'S1:E1 Play' : 'Play'}
           </button>
           <button 
-            onClick={() => {
-              const link = document.createElement('a');
-              link.href = movie.videoUrl;
-              link.download = movie.title;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }}
+            onClick={handleDownload}
             className="flex items-center justify-center p-3 bg-gray-500/50 text-white rounded hover:bg-gray-500/40 transition-colors backdrop-blur-md border border-white/10"
             title="Download"
           >

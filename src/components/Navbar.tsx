@@ -4,7 +4,8 @@ import { cn } from '../lib/utils';
 import { User as FirebaseUser } from 'firebase/auth';
 
 interface NavbarProps {
-  onAddClick: () => void;
+  onAddMovieClick: () => void;
+  onAddTVShowClick: () => void;
   user: FirebaseUser | null;
   onLogin: () => void;
   onLogout: () => void;
@@ -12,7 +13,15 @@ interface NavbarProps {
   setSearchQuery: (query: string) => void;
 }
 
-export const Navbar = ({ onAddClick, user, onLogin, onLogout, searchQuery, setSearchQuery }: NavbarProps) => {
+export const Navbar = ({ 
+  onAddMovieClick, 
+  onAddTVShowClick, 
+  user, 
+  onLogin, 
+  onLogout, 
+  searchQuery, 
+  setSearchQuery 
+}: NavbarProps) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -46,7 +55,10 @@ export const Navbar = ({ onAddClick, user, onLogin, onLogout, searchQuery, setSe
           <li className="hover:text-gray-400 cursor-pointer transition-colors">Movies</li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">New & Popular</li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">My List</li>
-          <li onClick={onAddClick} className="ml-4 px-3 py-1 bg-netflix-red text-white text-xs font-bold rounded cursor-pointer hover:bg-[#ff0a16] transition-colors uppercase tracking-widest">Add Content</li>
+          <div className="flex gap-2 ml-4">
+            <li onClick={onAddMovieClick} className="px-3 py-1 bg-netflix-red text-white text-[10px] font-bold rounded cursor-pointer hover:bg-[#ff0a16] transition-colors uppercase tracking-widest whitespace-nowrap">Add Movie</li>
+            <li onClick={onAddTVShowClick} className="px-3 py-1 bg-zinc-800 text-white text-[10px] font-bold rounded cursor-pointer hover:bg-zinc-700 transition-colors uppercase tracking-widest whitespace-nowrap border border-white/10">Add TV Show</li>
+          </div>
         </ul>
       </div>
 

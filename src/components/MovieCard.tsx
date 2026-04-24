@@ -25,6 +25,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
       />
       
       <div className="absolute inset-x-0 bottom-0 p-3 z-20">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          {movie.contentType === 'tv' && (
+            <span className="text-[7px] font-black tracking-widest text-white bg-netflix-red px-1 rounded-sm uppercase">TV</span>
+          )}
+          <span className="text-[8px] text-gray-400 font-bold">{movie.year}</span>
+        </div>
         <h3 className="text-xs font-bold text-white uppercase tracking-wider line-clamp-1">{movie.title}</h3>
       </div>
       
