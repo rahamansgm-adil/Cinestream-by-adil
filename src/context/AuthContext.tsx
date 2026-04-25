@@ -37,7 +37,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkAdminStatus = async (user = auth.currentUser) => {
     try {
-      if (!user || user.email !== 'rahamansgmadil2@gmail.com') {
+      if (!user || !user.email || user.email.toLowerCase() !== 'rahamansgmadil2@gmail.com') {
         setIsAdmin(false);
         setIsLoading(false);
         return;
@@ -48,12 +48,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const headers = await getAuthHeaders();
       const response = await axios.get('/api/admin/verify', { 
-        headers,
-        withCredentials: true 
+        headers
       });
       setIsAdmin(response.data.isAdmin);
     } catch (error) {
-      // Don't flip back to false immediately if it was just a network error
       console.error('Admin verification failed:', error);
     } finally {
       setIsLoading(false);

@@ -59,9 +59,19 @@ export const Navbar = ({
           <li className="hover:text-gray-400 cursor-pointer transition-colors">My List</li>
           
           {isAdmin && (
-            <div className="flex gap-2 ml-4">
-              <li onClick={onAddMovieClick} className="px-3 py-1 bg-netflix-red text-white text-[10px] font-bold rounded cursor-pointer hover:bg-[#ff0a16] transition-colors uppercase tracking-widest whitespace-nowrap">Add Movie</li>
-              <li onClick={onAddTVShowClick} className="px-3 py-1 bg-zinc-800 text-white text-[10px] font-bold rounded cursor-pointer hover:bg-zinc-700 transition-colors uppercase tracking-widest whitespace-nowrap border border-white/10">Add TV Show</li>
+            <div className="flex items-center gap-3 ml-6 pl-6 border-l border-white/20">
+              <button 
+                onClick={onAddMovieClick} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-netflix-red text-white text-[11px] font-black uppercase tracking-widest rounded hover:bg-[#ff0a16] transition-all hover:scale-105 active:scale-95 shadow-lg shadow-netflix-red/20"
+              >
+                <Plus size={14} /> Add Movie
+              </button>
+              <button 
+                onClick={onAddTVShowClick} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 text-white text-[11px] font-black uppercase tracking-widest rounded hover:bg-zinc-700 transition-all hover:scale-105 active:scale-95 border border-white/10"
+              >
+                <Plus size={14} /> Add TV Show
+              </button>
             </div>
           )}
         </ul>

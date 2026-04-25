@@ -116,13 +116,12 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
             id: ep.id || `ep-${Date.now()}-${idx}`,
             number: ep.number || idx + 1
           })) : [],
-          createdBy: auth.currentUser?.email || 'admin_panel'
+          createdBy: auth.currentUser?.email || 'rahamansgmadil2@gmail.com'
         };
 
         const headers = await getAuthHeaders();
         const response = await axios.post('/api/admin/add-content', movieData, { 
-          headers,
-          withCredentials: true 
+          headers
         });
         
         console.log('Movie added with ID:', response.data.id);
