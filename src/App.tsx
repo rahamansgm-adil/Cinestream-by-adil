@@ -92,6 +92,7 @@ export default function App() {
     if (!playingMovie) return null;
     
     const url = playingMovie.videoUrl.toLowerCase();
+    let src = playingMovie.videoUrl;
     let type = 'video/mp4'; // Default
     
     if (url.endsWith('.m3u8')) {
@@ -101,6 +102,11 @@ export default function App() {
     } else if (url.endsWith('.webm')) {
       type = 'video/webm';
     } else if (url.includes('drive.google.com')) {
+      // Use the proxy for Google Drive links
+      const driveId = url.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/)?.[1];
+      if (driveId) {
+        src = `/api/stream?id=${driveId}`;
+      }
       type = 'video/mp4'; // Our proxy serves it as mp4
     }
 
@@ -110,7 +116,7 @@ export default function App() {
       responsive: true,
       fluid: true,
       sources: [{
-        src: playingMovie.videoUrl,
+        src: src,
         type: type
       }]
     };

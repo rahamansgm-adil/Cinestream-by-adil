@@ -72,6 +72,11 @@ async function startServer() {
     }
   });
 
+  // Redirect /admin to home page since we removed the admin login panel
+  app.get("/admin", (req, res) => {
+    res.redirect("/");
+  });
+
   // API Route for Google Drive Streaming Proxy
   app.get("/api/stream", async (req, res) => {
     const fileId = req.query.id as string;
