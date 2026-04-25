@@ -19,48 +19,30 @@ if (getApps().length === 0) {
 const adminDb = getFirestore("ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281");
 const adminAuth = getAdminAuth();
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-for-dev";
-const ADMIN_USER = process.env.ADMIN_USERNAME || "admin";
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || "password123";
-
-// Middleware to verify Admin JWT or Firebase ID Token
+// Middleware to verify Firebase ID Token (Bypass for owner)
 const verifyAdminToken = async (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
-  const cookieToken = req.cookies.admin_token;
   
-  let token = cookieToken;
+  let token = null;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.split(' ')[1];
   }
 
   if (!token) {
-    console.warn(`[Admin] Token missing for ${req.method} ${req.path}`);
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ error: "Unauthorized: Admin privileges required" });
   }
 
-  // 1. Try verifying as manual Admin JWT
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    if (decoded && decoded.role === 'admin') {
-      return next();
-    }
-  } catch (err) {
-    // If JWT verification fails, try Firebase fallback
-  }
-
-  // 2. Try verifying as Firebase ID Token (Bypass for owner)
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
     // Explicitly allow the owner's email
     if (decodedToken.email === 'rahamansgmadil2@gmail.com' && decodedToken.email_verified) {
-      console.log(`[Admin] Owner bypassed login via Firebase token: ${decodedToken.email}`);
       return next();
     }
   } catch (err) {
-    console.error(`[Admin] Token invalid for ${req.method} ${req.path}: token was not a valid admin JWT or Firebase ID token.`);
+    console.error(`[Admin] Token verification failed:`, err.message);
   }
 
-  res.status(401).json({ error: "Invalid or expired token" });
+  res.status(401).json({ error: "Unauthorized: Invalid admin token" });
 };
 
 async function startServer() {
@@ -190,35 +172,11 @@ async function startServer() {
     }
   });
 
-  // Admin Authentication Route
-  app.post("/api/admin/login", (req, res) => {
-    const { username, password } = req.body;
-
-    if (username === ADMIN_USER && password === ADMIN_PASS) {
-      const token = jwt.sign({ role: "admin" }, JWT_SECRET, { expiresIn: "7d" });
-      
-      console.log(`[Admin] Login successful for user: ${username}`);
-      res.cookie("admin_token", token, {
-        httpOnly: true,
-        secure: false, // Set to false for dev/proxy compatibility
-        sameSite: "lax",
-        path: "/",
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
-
-      return res.json({ success: true, isAdmin: true, token });
-    }
-
-    console.warn(`[Admin] Login failed for user: ${username}`);
-    res.status(401).json({ success: false, message: "Invalid credentials" });
-  });
-
   // Admin Verification Route
   app.get("/api/admin/verify", async (req, res) => {
     const authHeader = req.headers.authorization;
-    const cookieToken = req.cookies.admin_token;
     
-    let token = cookieToken;
+    let token = null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
     }
@@ -228,28 +186,14 @@ async function startServer() {
     }
 
     try {
-      // Check Admin JWT first
-      try {
-        jwt.verify(token, JWT_SECRET);
-        return res.json({ isAdmin: true });
-      } catch (e) {}
-
-      // Check Firebase Token as fallback
       const decodedToken = await adminAuth.verifyIdToken(token);
       if (decodedToken.email === 'rahamansgmadil2@gmail.com' && decodedToken.email_verified) {
         return res.json({ isAdmin: true });
       }
-      
       res.json({ isAdmin: false });
     } catch (err) {
       res.json({ isAdmin: false });
     }
-  });
-
-  // Admin Logout Route
-  app.post("/api/admin/logout", (req, res) => {
-    res.clearCookie("admin_token");
-    res.json({ success: true });
   });
 
   // Vite middleware for development

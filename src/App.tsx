@@ -13,7 +13,7 @@ import MovieRow from './components/MovieRow';
 import MovieDetails from './components/MovieDetails';
 import VideoPlayer from './components/VideoPlayer';
 import AddMovieForm from './components/AddMovieForm';
-import { AdminLogin } from './components/AdminLogin';
+import { UserLoginModal } from './components/UserLoginModal';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 import { MOVIES as initialMovies, CATEGORIES, Movie } from './data/movies';
@@ -27,7 +27,7 @@ export default function App() {
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [playingMovie, setPlayingMovie] = useState<Movie | null>(null);
   const [activeAddForm, setActiveAddForm] = useState<'movie' | 'tv' | null>(null);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showUserLogin, setShowUserLogin] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { isAdmin } = useAuth();
@@ -121,9 +121,8 @@ export default function App() {
       <Navbar 
         onAddMovieClick={() => setActiveAddForm('movie')} 
         onAddTVShowClick={() => setActiveAddForm('tv')}
-        onAdminLoginClick={() => setShowAdminLogin(true)}
         user={user}
-        onLogin={signInWithGoogle}
+        onLogin={() => setShowUserLogin(true)}
         onLogout={() => signOut(auth)}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -239,10 +238,10 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Admin Login Modal */}
+      {/* User Login Modal */}
       <AnimatePresence>
-        {showAdminLogin && (
-          <AdminLogin onClose={() => setShowAdminLogin(false)} />
+        {showUserLogin && (
+          <UserLoginModal onClose={() => setShowUserLogin(false)} />
         )}
       </AnimatePresence>
 

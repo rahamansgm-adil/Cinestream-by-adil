@@ -26,13 +26,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const getAuthHeaders = async (): Promise<{ Authorization: string } | {}> => {
-    const adminToken = localStorage.getItem('admin_token');
-    if (adminToken) {
-      return { Authorization: `Bearer ${adminToken}` };
-    }
-    
     const user = auth.currentUser;
-    if (user && user.email === 'rahamansgmadil2@gmail.com') {
+    if (user) {
       const idToken = await user.getIdToken();
       return { Authorization: `Bearer ${idToken}` };
     }
@@ -42,6 +37,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkAdminStatus = async () => {
     try {
+      const user = auth.currentUser;
+      if (!user || user.email !== 'rahamansgmadil2@gmail.com') {
+        setIsAdmin(false);
+        setIsLoading(false);
+        return;
+      }
+
       const headers = await getAuthHeaders();
       const response = await axios.get('/api/admin/verify', { 
         headers,
@@ -55,29 +57,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    try {
-      const response = await axios.post('/api/admin/login', { username, password }, { withCredentials: true });
-      if (response.data.success && response.data.token) {
-        localStorage.setItem('admin_token', response.data.token);
-      }
-      setIsAdmin(response.data.isAdmin);
-      return response.data.success;
-    } catch (error) {
-      setIsAdmin(false);
-      return false;
-    }
+  const login = async (_username: string, _password: string): Promise<boolean> => {
+    return false; // Manual login disabled
   };
 
   const logout = async () => {
-    try {
-      localStorage.removeItem('admin_token');
-      await axios.post('/api/admin/logout', {}, { withCredentials: true });
-      setIsAdmin(false);
-    } catch (error) {
-      console.error('Logout failed', error);
-      setIsAdmin(false); // Force local state change
-    }
+    setIsAdmin(false);
   };
 
   return (

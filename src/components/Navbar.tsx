@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext';
 interface NavbarProps {
   onAddMovieClick: () => void;
   onAddTVShowClick: () => void;
-  onAdminLoginClick: () => void;
   user: FirebaseUser | null;
   onLogin: () => void;
   onLogout: () => void;
@@ -18,14 +17,13 @@ interface NavbarProps {
 export const Navbar = ({ 
   onAddMovieClick, 
   onAddTVShowClick, 
-  onAdminLoginClick,
   user, 
   onLogin, 
   onLogout, 
   searchQuery, 
   setSearchQuery 
 }: NavbarProps) => {
-  const { isAdmin, logout: adminLogout } = useAuth();
+  const { isAdmin } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -120,24 +118,17 @@ export const Navbar = ({
               <div className="absolute right-0 mt-4 w-48 bg-black/95 border border-zinc-800 rounded-sm shadow-2xl py-2 z-50">
                 <div className="px-4 py-2 border-b border-zinc-800 mb-2">
                   <p className="text-xs text-gray-400">Signed in as</p>
-                  <p className="text-sm font-bold truncate">{user.displayName || user.email}</p>
+                  <p className="text-sm font-bold truncate">
+                    {user.isAnonymous ? "Guest Browser" : (user.displayName || user.email)}
+                  </p>
                 </div>
                 
-                {!isAdmin && (
+                {!isAdmin && !user?.email && (
                   <button 
-                    onClick={() => { onAdminLoginClick(); setShowProfileMenu(false); }}
+                    onClick={() => { onLogin(); setShowProfileMenu(false); }}
                     className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2 transition-colors border-b border-zinc-800"
                   >
-                    <Settings size={16} /> Admin Panel
-                  </button>
-                )}
-
-                {isAdmin && (
-                  <button 
-                    onClick={() => { adminLogout(); setShowProfileMenu(false); }}
-                    className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2 transition-colors border-b border-zinc-800 text-netflix-red"
-                  >
-                    <Settings size={16} /> Exit Admin Dashboard
+                    <Settings size={16} /> Admin Access
                   </button>
                 )}
 
@@ -154,18 +145,10 @@ export const Navbar = ({
           <div className="flex items-center gap-3">
              {!isAdmin && (
                 <button 
-                  onClick={onAdminLoginClick}
+                  onClick={onLogin}
                   className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors"
                 >
                   <Settings size={16} /> Admin
-                </button>
-              )}
-              {isAdmin && (
-                <button 
-                  onClick={adminLogout}
-                  className="flex items-center gap-2 px-3 py-1 rounded bg-zinc-800 text-[10px] font-black uppercase tracking-widest text-netflix-red hover:bg-zinc-700 transition-colors border border-netflix-red/20"
-                >
-                  <Settings size={14} /> Exit Admin
                 </button>
               )}
             <button 
