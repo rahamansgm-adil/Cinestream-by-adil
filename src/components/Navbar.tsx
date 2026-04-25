@@ -151,12 +151,30 @@ export const Navbar = ({
             )}
           </div>
         ) : (
-          <button 
-            onClick={onLogin}
-            className="flex items-center gap-2 bg-netflix-red px-4 py-1.5 rounded-sm font-bold text-sm hover:bg-[#ff0a16] transition-colors uppercase tracking-wide"
-          >
-            <LogIn size={16} /> Login
-          </button>
+          <div className="flex items-center gap-3">
+             {!isAdmin && (
+                <button 
+                  onClick={onAdminLoginClick}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors"
+                >
+                  <Settings size={16} /> Admin
+                </button>
+              )}
+              {isAdmin && (
+                <button 
+                  onClick={adminLogout}
+                  className="flex items-center gap-2 px-3 py-1 rounded bg-zinc-800 text-[10px] font-black uppercase tracking-widest text-netflix-red hover:bg-zinc-700 transition-colors border border-netflix-red/20"
+                >
+                  <Settings size={14} /> Exit Admin
+                </button>
+              )}
+            <button 
+              onClick={onLogin}
+              className="flex items-center gap-2 bg-netflix-red px-4 py-1.5 rounded-sm font-bold text-sm hover:bg-[#ff0a16] transition-colors uppercase tracking-wide"
+            >
+              <LogIn size={16} /> Login
+            </button>
+          </div>
         )}
         
         <Menu className="lg:hidden cursor-pointer" size={24} />

@@ -4,7 +4,9 @@ import { Upload, X, Check, AlertCircle, Play, Plus, Info, Loader2, Trash2, Chevr
 import { Movie, Episode } from '@/src/data/movies';
 import { cn } from '@/src/lib/utils';
 import { db, auth } from '@/src/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
 
 interface AddMovieFormProps {
   onAdd: (movie: Movie) => void;
@@ -13,6 +15,7 @@ interface AddMovieFormProps {
 }
 
 export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type = 'movie' }) => {
+  const { isAdmin: isSystemAdmin, getAuthHeaders } = useAuth();
   const [formData, setFormData] = useState<Partial<Movie>>({
     title: '',
     description: '',
@@ -46,13 +49,8 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
   const [contentGenreInput, setContentGenreInput] = useState('');
   const [contentCastInput, setContentCastInput] = useState('');
 
-  const isAdmin = auth.currentUser?.email === 'rahamansgmadil2@gmail.com';
-
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!auth.currentUser) {
-      newErrors.auth = 'You must be signed in to add movies.';
-    }
     if (!formData.title) newErrors.title = 'Title is required';
     if (!formData.description) newErrors.description = 'Description is required';
     if (!formData.thumbnailUrl) newErrors.thumbnailUrl = 'Thumbnail URL is required';
@@ -96,7 +94,7 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validate() && auth.currentUser) {
+    if (validate()) {
       setIsSubmitting(true);
       try {
         const movieData = {
@@ -118,21 +116,25 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
             id: ep.id || `ep-${Date.now()}-${idx}`,
             number: ep.number || idx + 1
           })) : [],
-          createdAt: serverTimestamp(),
-          createdBy: auth.currentUser.uid
+          createdBy: auth.currentUser?.email || 'admin_panel'
         };
 
-        const docRef = await addDoc(collection(db, 'movies'), movieData);
+        const headers = await getAuthHeaders();
+        const response = await axios.post('/api/admin/add-content', movieData, { 
+          headers,
+          withCredentials: true 
+        });
         
-        console.log('Movie added with ID:', docRef.id);
+        console.log('Movie added with ID:', response.data.id);
         setShowSuccess(true);
         setTimeout(() => {
           setShowSuccess(false);
           onClose();
         }, 2000);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error adding movie:", error);
-        setErrors({ submit: 'Failed to save movie to database. Please check your connection.' });
+        const serverError = error.response?.data?.error || error.message;
+        setErrors({ submit: `Failed to save content: ${serverError}` });
       } finally {
         setIsSubmitting(false);
       }
@@ -457,7 +459,6 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                 </>
               )}
             </button>
-            {errors.auth && <p className="text-red-500 text-center text-xs font-bold uppercase tracking-wider">{errors.auth}</p>}
             {errors.submit && <p className="text-red-500 text-center text-xs font-bold uppercase tracking-wider">{errors.submit}</p>}
           </form>
         </div>
