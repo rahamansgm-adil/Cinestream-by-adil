@@ -19,7 +19,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      await checkAdminStatus();
+      await checkAdminStatus(user);
     });
     
     return () => unsubscribe();
@@ -35,14 +35,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return {};
   };
 
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = async (user = auth.currentUser) => {
     try {
-      const user = auth.currentUser;
       if (!user || user.email !== 'rahamansgmadil2@gmail.com') {
         setIsAdmin(false);
         setIsLoading(false);
         return;
       }
+
+      // Optimistically set to true for the owner email on frontend
+      setIsAdmin(true);
 
       const headers = await getAuthHeaders();
       const response = await axios.get('/api/admin/verify', { 
@@ -51,7 +53,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       setIsAdmin(response.data.isAdmin);
     } catch (error) {
-      setIsAdmin(false);
+      // Don't flip back to false immediately if it was just a network error
+      console.error('Admin verification failed:', error);
     } finally {
       setIsLoading(false);
     }

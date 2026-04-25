@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, User, Menu, LogOut, LogIn, X, Settings } from 'lucide-react';
+import { Search, Bell, User, Menu, LogOut, LogIn, X, Settings, Plus } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { User as FirebaseUser } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
@@ -130,6 +130,23 @@ export const Navbar = ({
                   >
                     <Settings size={16} /> Admin Access
                   </button>
+                )}
+
+                {isAdmin && (
+                  <>
+                    <button 
+                      onClick={() => { onAddMovieClick(); setShowProfileMenu(false); }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2 transition-colors text-white font-medium"
+                    >
+                      <Plus size={16} /> Add Movie
+                    </button>
+                    <button 
+                      onClick={() => { onAddTVShowClick(); setShowProfileMenu(false); }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2 transition-colors text-white font-medium border-b border-zinc-800"
+                    >
+                      <Plus size={16} /> Add TV Show
+                    </button>
+                  </>
                 )}
 
                 <button 
