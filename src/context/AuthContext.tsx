@@ -28,7 +28,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getAuthHeaders = async (): Promise<{ Authorization: string } | {}> => {
     const user = auth.currentUser;
     if (user) {
-      const idToken = await user.getIdToken();
+      // Force refresh the token to ensure it's not expired
+      const idToken = await user.getIdToken(true);
       return { Authorization: `Bearer ${idToken}` };
     }
     

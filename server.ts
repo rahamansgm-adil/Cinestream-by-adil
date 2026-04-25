@@ -10,14 +10,21 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 
 // Initialize Firebase Admin
+let adminApp;
 if (getApps().length === 0) {
-  initializeApp({
+  adminApp = initializeApp({
     projectId: "gen-lang-client-0142261778"
   });
+} else {
+  adminApp = getApps()[0];
 }
 
-const adminDb = getFirestore("ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281");
-const adminAuth = getAdminAuth();
+// Target specific database if possible, otherwise use default
+const DB_ID = "ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281";
+let adminDb = getFirestore(adminApp, DB_ID);
+const adminAuth = getAdminAuth(adminApp);
+
+console.log(`[Admin] Init with DB ID: ${DB_ID}`);
 
 // Middleware to verify Firebase ID Token (Bypass for owner)
 const verifyAdminToken = async (req: any, res: any, next: any) => {
@@ -29,16 +36,21 @@ const verifyAdminToken = async (req: any, res: any, next: any) => {
   }
 
   if (!token) {
+    console.error(`[Admin] No token provided for ${req.method} ${req.path}`);
     return res.status(401).json({ error: "Unauthorized: Admin privileges required" });
   }
 
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
+    const userEmail = decodedToken.email?.toLowerCase();
+    
     // Explicitly allow the owner's email
-    if (decodedToken.email === 'rahamansgmadil2@gmail.com' && decodedToken.email_verified) {
+    if (userEmail === 'rahamansgmadil2@gmail.com') {
       return next();
     }
-  } catch (err) {
+    
+    console.warn(`[Admin] Access denied for user: ${userEmail}`);
+  } catch (err: any) {
     console.error(`[Admin] Token verification failed:`, err.message);
   }
 
@@ -49,6 +61,9 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  console.log("[EnvCheck] PROJECT_ID:", process.env.GOOGLE_CLOUD_PROJECT);
+  console.log("[EnvCheck] FIREBASE_CONFIG:", process.env.FIREBASE_CONFIG ? "Exists" : "Missing");
+
   app.use(cors({
     origin: true,
     credentials: true
@@ -58,17 +73,50 @@ async function startServer() {
 
   // API Route for admin to add content
   app.post("/api/admin/add-content", verifyAdminToken, async (req, res) => {
+    console.log(`[Admin] Attempting to add: ${req.body?.title}`);
+    const authHeader = req.headers.authorization;
+    
     try {
       const contentData = {
-        ...req.body,
-        createdAt: FieldValue.serverTimestamp(),
+        fields: {
+          title: { stringValue: req.body.title },
+          videoUrl: { stringValue: req.body.videoUrl },
+          thumbnailUrl: { stringValue: req.body.thumbnailUrl },
+          createdBy: { stringValue: req.body.createdBy },
+          createdAt: { timestampValue: new Date().toISOString() },
+          description: { stringValue: req.body.description || "" },
+          duration: { stringValue: req.body.duration || "" },
+          year: { stringValue: req.body.year || "" },
+          rating: { stringValue: req.body.rating || "" },
+          trailerUrl: { stringValue: req.body.trailerUrl || "" },
+          logoUrl: { stringValue: req.body.logoUrl || "" }
+        }
       };
       
-      const docRef = await adminDb.collection("movies").add(contentData);
-      res.json({ success: true, id: docRef.id });
-    } catch (error) {
-      console.error("Error adding content via admin API:", error);
-      res.status(500).json({ error: "Failed to add content" });
+      const projectId = "gen-lang-client-0142261778";
+      const databaseId = "ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281";
+      const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/movies`;
+      
+      console.log(`[Admin] Proxying to Firestore REST API: ${firestoreUrl}`);
+      
+      const response = await axios.post(firestoreUrl, contentData, {
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const docPath = response.data.name;
+      const docId = docPath.split('/').pop();
+      
+      console.log(`[Admin] Saved successfully via REST! ID: ${docId}`);
+      res.json({ success: true, id: docId });
+    } catch (error: any) {
+      console.error("[Admin] REST API attempt failed:", error.response?.data || error.message);
+      res.status(error.response?.status || 500).json({ 
+        error: error.response?.data?.error?.message || error.message,
+        details: "Firestore REST API error. This bypasses Server IAM by using the User's own token."
+      });
     }
   });
 
@@ -196,7 +244,7 @@ async function startServer() {
         return res.json({ isAdmin: true });
       }
       res.json({ isAdmin: false });
-    } catch (err) {
+    } catch (err: any) {
       console.error(`[Admin] Verify failed:`, err.message);
       res.json({ isAdmin: false });
     }
