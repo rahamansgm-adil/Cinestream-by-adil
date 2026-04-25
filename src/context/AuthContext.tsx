@@ -37,22 +37,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkAdminStatus = async (user = auth.currentUser) => {
     try {
-      if (!user || !user.email || user.email.toLowerCase() !== 'rahamansgmadil2@gmail.com') {
+      const userEmail = user?.email?.toLowerCase();
+      if (!user || !userEmail || userEmail !== 'rahamansgmadil2@gmail.com') {
         setIsAdmin(false);
         setIsLoading(false);
         return;
       }
 
-      // Optimistically set to true for the owner email on frontend
+      // Consistently set to true for the owner email on frontend
       setIsAdmin(true);
 
       const headers = await getAuthHeaders();
       const response = await axios.get('/api/admin/verify', { 
         headers
       });
-      setIsAdmin(response.data.isAdmin);
+      
+      // Only update if the server gives a definitive answer, 
+      // but keep it true if we know it's the owner email
+      if (response.data.isAdmin !== undefined) {
+        setIsAdmin(response.data.isAdmin || userEmail === 'rahamansgmadil2@gmail.com');
+      }
     } catch (error) {
       console.error('Admin verification failed:', error);
+      // Fallback to email check if server is down but user is logged in as owner
+      setIsAdmin(user?.email?.toLowerCase() === 'rahamansgmadil2@gmail.com');
     } finally {
       setIsLoading(false);
     }

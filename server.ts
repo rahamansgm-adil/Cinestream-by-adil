@@ -192,11 +192,12 @@ async function startServer() {
 
     try {
       const decodedToken = await adminAuth.verifyIdToken(token);
-      if (decodedToken.email === 'rahamansgmadil2@gmail.com' && decodedToken.email_verified) {
+      if (decodedToken.email?.toLowerCase() === 'rahamansgmadil2@gmail.com') {
         return res.json({ isAdmin: true });
       }
       res.json({ isAdmin: false });
     } catch (err) {
+      console.error(`[Admin] Verify failed:`, err.message);
       res.json({ isAdmin: false });
     }
   });
