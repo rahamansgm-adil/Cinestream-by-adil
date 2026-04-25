@@ -87,7 +87,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
     // Convert Drive Source URLs
     if (modifiedOptions.sources) {
       modifiedOptions.sources = modifiedOptions.sources.map((s: any) => {
-        if (s.src.includes('drive.google.com')) {
+        if (s.src && s.src.includes('drive.google.com')) {
           const match = s.src.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/);
           const driveId = match ? match[1] : '';
           return { ...s, src: `/api/stream?id=${driveId}`, type: 'video/mp4' };
@@ -96,20 +96,18 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       });
     }
 
-    // Convert Drive Track URLs and populate subtitles state
+    // Convert Drive Track URLs
     if (modifiedOptions.tracks) {
       modifiedOptions.tracks = modifiedOptions.tracks.map((t: any) => {
-        if (t.src.includes('drive.google.com')) {
+        if (t.src && t.src.includes('drive.google.com')) {
           const match = t.src.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/);
           const driveId = match ? match[1] : '';
           return { ...t, src: `/api/stream?id=${driveId}` };
         }
         return t;
       });
-      setSubtitles(modifiedOptions.tracks);
     }
 
-    const isDrive = modifiedOptions.sources?.some((s: any) => s.src.includes('drive.google.com'));
     setError(null);
 
     if (!playerRef.current) {
@@ -159,6 +157,15 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       }
     }
   }, [options, onReady]);
+
+  // Sync subtitles state with options
+  useEffect(() => {
+    if (options?.tracks) {
+      setSubtitles(options.tracks);
+    } else {
+      setSubtitles([]);
+    }
+  }, [options?.tracks]);
 
   // Handle disposal
   useEffect(() => {
@@ -256,7 +263,12 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute inset-0 z-10 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-auto"
+            className="absolute inset-0 z-10 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-none"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                togglePlay();
+              }
+            }}
           >
             {/* Top Bar */}
             <div className="p-8 flex items-center justify-between pointer-events-auto">
@@ -284,7 +296,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                       </button>
                       
                       {showSubtitleMenu && (
-                        <div className="absolute right-0 top-full mt-4 w-48 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50">
+                        <div className="absolute right-0 top-full mt-4 w-48 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50 pointer-events-auto">
                           <button
                             onClick={() => changeSubtitle('off')}
                             className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${activeSubtitle === 'off' ? 'text-netflix-red font-bold' : ''}`}
@@ -319,7 +331,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                   </button>
                   
                   {showSpeedMenu && (
-                    <div className="absolute right-0 top-full mt-4 w-32 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50">
+                    <div className="absolute right-0 top-full mt-4 w-32 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50 pointer-events-auto">
                       {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
                         <button
                           key={speed}
@@ -334,6 +346,12 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                 </div>
               </div>
             </div>
+
+            {/* Middle clickable area for play/pause toggle */}
+            <div 
+              className="flex-1 pointer-events-auto cursor-pointer" 
+              onClick={() => togglePlay()}
+            />
 
             {/* Center Play/Pause Large Feed (Optional, but icons only for buffering) */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

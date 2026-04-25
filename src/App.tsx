@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, LogIn, LogOut, Plus } from 'lucide-react';
 import { cn } from './lib/utils';
@@ -40,16 +40,27 @@ export default function App() {
     if (!searchQuery.trim()) return unique;
     
     const query = searchQuery.toLowerCase().trim();
-    return unique.filter(m => 
-      m.title.toLowerCase().includes(query) ||
-      m.description.toLowerCase().includes(query) ||
-      (m.genres || []).some(g => g.toLowerCase().includes(query)) ||
-      (m.cast || []).some(c => c.toLowerCase().includes(query)) ||
-      (m.contentType === 'tv' && m.episodes?.some(ep => 
-        ep.title.toLowerCase().includes(query) ||
-        ep.description.toLowerCase().includes(query)
-      ))
-    );
+    return unique.filter(m => {
+      try {
+        const titleMatch = m.title?.toLowerCase().includes(query) || false;
+        const descMatch = m.description?.toLowerCase().includes(query) || false;
+        const genreMatch = (m.genres || []).some(g => g && typeof g === 'string' && g.toLowerCase().includes(query));
+        const castMatch = (m.cast || []).some(c => c && typeof c === 'string' && c.toLowerCase().includes(query));
+        
+        let episodeMatch = false;
+        if (m.contentType === 'tv' && Array.isArray(m.episodes)) {
+          episodeMatch = m.episodes.some(ep => 
+            ep?.title?.toLowerCase().includes(query) || 
+            ep?.description?.toLowerCase().includes(query)
+          );
+        }
+        
+        return titleMatch || descMatch || genreMatch || castMatch || episodeMatch;
+      } catch (err) {
+        console.error("Search error for item:", m, err);
+        return false;
+      }
+    });
   }, [dbMovies, movies, searchQuery]);
 
   useEffect(() => {
@@ -84,9 +95,13 @@ export default function App() {
     // or just let the observer update dbMovies
   };
 
-  const handleClosePlayer = () => {
+  const handleClosePlayer = useCallback(() => {
     setPlayingMovie(null);
-  };
+  }, []);
+
+  const handlePlayerReady = useCallback((player: any) => {
+    console.log('Video Player Ready');
+  }, []);
 
   const videoJsOptions = useMemo(() => {
     if (!playingMovie) return null;
@@ -254,7 +269,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* High-Quality Video Player Overlay */}
       <AnimatePresence>
         {playingMovie && videoJsOptions && (
           <motion.div 
@@ -270,9 +284,7 @@ export default function App() {
                   controls: false // Force off, handled by custom UI
                 }} 
                 onBack={handleClosePlayer}
-                onReady={(player) => {
-                  console.log('Video Player Ready');
-                }}
+                onReady={handlePlayerReady}
               />
             </div>
           </motion.div>

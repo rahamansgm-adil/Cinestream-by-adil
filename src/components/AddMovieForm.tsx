@@ -55,25 +55,29 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.title) newErrors.title = 'Title is required';
-    if (!formData.description) newErrors.description = 'Description is required';
-    if (!formData.thumbnailUrl) newErrors.thumbnailUrl = 'Thumbnail URL is required';
-    if (!formData.bannerUrl) newErrors.bannerUrl = 'Banner URL is required';
+    if (!formData.title?.trim()) newErrors.title = 'Title is required';
+    if (!formData.description?.trim()) newErrors.description = 'Description is required';
+    if (!formData.thumbnailUrl?.trim()) newErrors.thumbnailUrl = 'Thumbnail URL is required';
+    if (!formData.bannerUrl?.trim()) newErrors.bannerUrl = 'Banner URL is required';
     
     if (formData.contentType === 'movie') {
-      if (!formData.videoUrl) newErrors.videoUrl = 'Video URL is required';
-      
-      const videoUrl = formData.videoUrl || '';
-      const isDriveUrl = videoUrl.includes('drive.google.com/uc?export=download&id=') || videoUrl.includes('drive.google.com/file/d/');
-      const isArchiveUrl = videoUrl.includes('archive.org/');
-      const isValidFormat = videoUrl.endsWith('.m3u8') || videoUrl.endsWith('.mp4') || videoUrl.endsWith('.mkv') || isDriveUrl || isArchiveUrl;
-      
-      if (videoUrl && !isValidFormat) {
-        newErrors.videoUrl = 'Unsupported format. Use .mp4, .m3u8, .mkv, Google Drive or Archive.org link';
-      }
-      
-      if (isArchiveUrl && (videoUrl.includes('/details/') || videoUrl.includes('/metadata/'))) {
-        newErrors.videoUrl = 'Please use the DIRECT download link (ending in .mp4 or .mkv) from the Archive.org sidebar.';
+      if (!formData.videoUrl?.trim()) {
+        newErrors.videoUrl = 'Video URL is required';
+      } else {
+        const videoUrl = formData.videoUrl.trim();
+        const isDriveUrl = videoUrl.includes('drive.google.com/uc?export=download&id=') || 
+                           videoUrl.includes('drive.google.com/file/d/') ||
+                           videoUrl.includes('id=');
+        const isArchiveUrl = videoUrl.includes('archive.org/');
+        const isValidFormat = videoUrl.endsWith('.m3u8') || 
+                              videoUrl.endsWith('.mp4') || 
+                              videoUrl.endsWith('.mkv') || 
+                              videoUrl.endsWith('.webm') ||
+                              isDriveUrl || isArchiveUrl;
+        
+        if (!isValidFormat) {
+          newErrors.videoUrl = 'Use .mp4, .m3u8, .mkv, .webm, Google Drive or Archive.org link';
+        }
       }
     } else {
       if (episodes.length === 0) {
@@ -81,9 +85,14 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
       }
     }
     
-    if (!formData.duration) newErrors.duration = 'Duration is required';
+    if (!formData.duration?.trim()) newErrors.duration = 'Duration or Season count is required';
 
     setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      // Scroll to top of form or show error toast handled by UI
+      const firstError = Object.values(newErrors)[0];
+      console.warn('Validation failed:', firstError);
+    }
     return Object.keys(newErrors).length === 0;
   };
 
@@ -129,12 +138,34 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
           headers
         });
         
-        console.log('Movie added with ID:', response.data.id);
+        console.log('Content saved successfully:', response.data.id);
         setShowSuccess(true);
+        
+        // Reset form after success
         setTimeout(() => {
           setShowSuccess(false);
+          setFormData({
+            title: '',
+            description: '',
+            thumbnailUrl: '',
+            bannerUrl: '',
+            videoUrl: '',
+            year: '2024',
+            rating: 'PG-13',
+            duration: '',
+            trailerUrl: '',
+            logoUrl: '',
+            genres: [],
+            cast: [],
+            contentType: type,
+            episodes: []
+          });
+          setEpisodes([]);
+          setSubtitles([]);
+          setContentGenreInput('');
+          setContentCastInput('');
           onClose();
-        }, 2000);
+        }, 1500);
       } catch (error: any) {
         console.error("Error adding movie:", error);
         const serverError = error.response?.data?.error || error.message;
@@ -328,8 +359,15 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                         type="button"
                         onClick={() => {
                           if (newEpisode.title && newEpisode.videoUrl) {
-                            setEpisodes([...episodes, { ...newEpisode, id: Date.now().toString() }]);
-                            setNewEpisode({ title: '', description: '', videoUrl: '', duration: '', number: (newEpisode.number || 0) + 1 });
+                            const episodeId = `ep-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                            setEpisodes([...episodes, { ...newEpisode, id: episodeId }]);
+                            setNewEpisode({ 
+                              title: '', 
+                              description: '', 
+                              videoUrl: '', 
+                              duration: '', 
+                              number: (newEpisode.number || 0) + 1 
+                            });
                             if (episodes.length > 0) setShowEpisodeForm(false);
                           }
                         }}

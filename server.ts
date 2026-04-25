@@ -79,25 +79,43 @@ async function startServer() {
     try {
       // Helper to convert to Firestore REST format
       const toFirestoreValue = (val: any): any => {
+        if (val === null || val === undefined) return { nullValue: null };
         if (typeof val === 'string') return { stringValue: val };
-        if (typeof val === 'number') return { integerValue: val.toString() };
+        if (typeof val === 'number') {
+          // Firestore REST expects integers as strings for high precision
+          if (Number.isInteger(val)) return { integerValue: val.toString() };
+          return { doubleValue: val };
+        }
         if (typeof val === 'boolean') return { booleanValue: val };
         if (val instanceof Date) return { timestampValue: val.toISOString() };
+        
         if (Array.isArray(val)) {
           return { arrayValue: { values: val.map(v => toFirestoreValue(v)) } };
         }
-        if (typeof val === 'object' && val !== null) {
+        
+        if (typeof val === 'object') {
           const fields: any = {};
           for (const key in val) {
-            fields[key] = toFirestoreValue(val[key]);
+            if (val.hasOwnProperty(key) && val[key] !== undefined) {
+              fields[key] = toFirestoreValue(val[key]);
+            }
           }
           return { mapValue: { fields } };
         }
-        return { nullValue: null };
+        
+        return { stringValue: String(val) };
       };
 
       const fields: any = {};
-      const body = { ...req.body, createdAt: new Date().toISOString() };
+      const body = { 
+        ...req.body, 
+        createdAt: new Date().toISOString(),
+        // Ensure arrays are initialized if missing to avoid errors in mapping
+        genres: req.body.genres || [],
+        cast: req.body.cast || [],
+        subtitles: req.body.subtitles || [],
+        episodes: req.body.episodes || []
+      };
       
       for (const key in body) {
         if (body[key] !== undefined) {
