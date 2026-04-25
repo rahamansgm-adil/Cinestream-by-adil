@@ -1,3 +1,9 @@
+export interface Subtitle {
+  label: string;
+  src: string;
+  lang: string;
+}
+
 export interface Episode {
   id: string;
   number: number;
@@ -6,6 +12,7 @@ export interface Episode {
   videoUrl: string;
   duration: string;
   thumbnailUrl?: string;
+  subtitles?: Subtitle[];
 }
 
 export interface Movie {
@@ -24,6 +31,7 @@ export interface Movie {
   cast: string[];
   contentType?: 'movie' | 'tv';
   episodes?: Episode[];
+  subtitles?: Subtitle[];
 }
 
 export const MOVIES: Movie[] = [];

@@ -77,21 +77,35 @@ async function startServer() {
     const authHeader = req.headers.authorization;
     
     try {
-      const contentData = {
-        fields: {
-          title: { stringValue: req.body.title },
-          videoUrl: { stringValue: req.body.videoUrl },
-          thumbnailUrl: { stringValue: req.body.thumbnailUrl },
-          createdBy: { stringValue: req.body.createdBy },
-          createdAt: { timestampValue: new Date().toISOString() },
-          description: { stringValue: req.body.description || "" },
-          duration: { stringValue: req.body.duration || "" },
-          year: { stringValue: req.body.year || "" },
-          rating: { stringValue: req.body.rating || "" },
-          trailerUrl: { stringValue: req.body.trailerUrl || "" },
-          logoUrl: { stringValue: req.body.logoUrl || "" }
+      // Helper to convert to Firestore REST format
+      const toFirestoreValue = (val: any): any => {
+        if (typeof val === 'string') return { stringValue: val };
+        if (typeof val === 'number') return { integerValue: val.toString() };
+        if (typeof val === 'boolean') return { booleanValue: val };
+        if (val instanceof Date) return { timestampValue: val.toISOString() };
+        if (Array.isArray(val)) {
+          return { arrayValue: { values: val.map(v => toFirestoreValue(v)) } };
         }
+        if (typeof val === 'object' && val !== null) {
+          const fields: any = {};
+          for (const key in val) {
+            fields[key] = toFirestoreValue(val[key]);
+          }
+          return { mapValue: { fields } };
+        }
+        return { nullValue: null };
       };
+
+      const fields: any = {};
+      const body = { ...req.body, createdAt: new Date().toISOString() };
+      
+      for (const key in body) {
+        if (body[key] !== undefined) {
+          fields[key] = toFirestoreValue(body[key]);
+        }
+      }
+
+      const contentData = { fields };
       
       const projectId = "gen-lang-client-0142261778";
       const databaseId = "ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281";
@@ -185,7 +199,9 @@ async function startServer() {
       const contentLength = driveResponse.headers['content-length'];
       const contentRange = driveResponse.headers['content-range'];
       const acceptRanges = (driveResponse.headers['accept-ranges'] as string) || 'bytes';
-      const outgoingContentType = contentType && contentType !== 'application/octet-stream' ? contentType : 'video/mp4';
+      const outgoingContentType = contentType && contentType !== 'application/octet-stream' 
+        ? contentType 
+        : (driveUrl.includes('.vtt') ? 'text/vtt' : (driveUrl.includes('.srt') ? 'text/plain' : 'video/mp4'));
 
       res.status(driveResponse.status);
       res.setHeader('Content-Type', String(outgoingContentType));

@@ -95,20 +95,22 @@ export default function App() {
     let src = playingMovie.videoUrl;
     let type = 'video/mp4'; // Default
     
-    if (url.endsWith('.m3u8')) {
-      type = 'application/x-mpegURL';
-    } else if (url.endsWith('.mkv')) {
-      type = 'video/x-matroska';
-    } else if (url.endsWith('.webm')) {
-      type = 'video/webm';
-    } else if (url.includes('drive.google.com')) {
-      // Use the proxy for Google Drive links
+    const isDrive = url.includes('drive.google.com');
+    if (isDrive) {
       const driveId = url.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/)?.[1];
       if (driveId) {
         src = `/api/stream?id=${driveId}`;
       }
-      type = 'video/mp4'; // Our proxy serves it as mp4
+      type = 'video/mp4';
     }
+
+    const tracks = playingMovie.subtitles?.map(s => ({
+      kind: 'captions',
+      label: s.label,
+      srclang: s.lang,
+      src: s.src,
+      default: false
+    })) || [];
 
     return {
       autoplay: true,
@@ -118,7 +120,8 @@ export default function App() {
       sources: [{
         src: src,
         type: type
-      }]
+      }],
+      tracks: tracks
     };
   }, [playingMovie]);
 

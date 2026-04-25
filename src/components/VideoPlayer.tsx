@@ -14,7 +14,8 @@ import {
   Maximize, 
   Minimize, 
   Settings,
-  ChevronLeft
+  ChevronLeft,
+  Captions
 } from 'lucide-react';
 import 'video.js/dist/video-js.css';
 
@@ -41,6 +42,9 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
   const [showControls, setShowControls] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+  const [subtitles, setSubtitles] = useState<any[]>([]);
+  const [activeSubtitle, setActiveSubtitle] = useState<string>('off');
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -61,6 +65,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       if (isPlaying) {
         setShowControls(false);
         setShowSpeedMenu(false);
+        setShowSubtitleMenu(false);
       }
     }, 3000);
   };
@@ -79,24 +84,33 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       responsive: true
     };
     
-    const isDrive = modifiedOptions.sources?.some((s: any) => s.src.includes('drive.google.com'));
-    setError(null);
-
-    if (isDrive && modifiedOptions.sources) {
+    // Convert Drive Source URLs
+    if (modifiedOptions.sources) {
       modifiedOptions.sources = modifiedOptions.sources.map((s: any) => {
         if (s.src.includes('drive.google.com')) {
           const match = s.src.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/);
           const driveId = match ? match[1] : '';
-          
-          return {
-            ...s,
-            src: `/api/stream?id=${driveId}`,
-            type: 'video/mp4'
-          };
+          return { ...s, src: `/api/stream?id=${driveId}`, type: 'video/mp4' };
         }
         return s;
       });
     }
+
+    // Convert Drive Track URLs and populate subtitles state
+    if (modifiedOptions.tracks) {
+      modifiedOptions.tracks = modifiedOptions.tracks.map((t: any) => {
+        if (t.src.includes('drive.google.com')) {
+          const match = t.src.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/);
+          const driveId = match ? match[1] : '';
+          return { ...t, src: `/api/stream?id=${driveId}` };
+        }
+        return t;
+      });
+      setSubtitles(modifiedOptions.tracks);
+    }
+
+    const isDrive = modifiedOptions.sources?.some((s: any) => s.src.includes('drive.google.com'));
+    setError(null);
 
     if (!playerRef.current) {
       const videoElement = document.createElement("video-js");
@@ -121,6 +135,14 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
         player.on('waiting', () => setIsBuffering(true));
         player.on('playing', () => setIsBuffering(false));
         player.on('fullscreenchange', () => setIsFullscreen(player.isFullscreen() || false));
+
+        // Initial subtitle state
+        const tracks = player.textTracks();
+        for (let i = 0; i < tracks.length; i++) {
+          if (tracks[i].mode === 'showing') {
+            setActiveSubtitle(tracks[i].label);
+          }
+        }
 
         player.on('error', () => {
           const vjsError = player.error();
@@ -194,6 +216,20 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
     setShowSpeedMenu(false);
   };
 
+  const changeSubtitle = (label: string) => {
+    if (!playerRef.current) return;
+    const tracks = playerRef.current.textTracks();
+    for (let i = 0; i < tracks.length; i++) {
+        if (label === 'off') {
+            tracks[i].mode = 'disabled';
+        } else {
+            tracks[i].mode = tracks[i].label === label ? 'showing' : 'disabled';
+        }
+    }
+    setActiveSubtitle(label);
+    setShowSubtitleMenu(false);
+  };
+
   const toggleFullscreen = () => {
     if (!playerRef.current) return;
     if (playerRef.current.isFullscreen()) {
@@ -220,7 +256,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute inset-0 z-10 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-none"
+            className="absolute inset-0 z-10 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-auto"
           >
             {/* Top Bar */}
             <div className="p-8 flex items-center justify-between pointer-events-auto">
@@ -234,10 +270,48 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                 </button>
               )}
               <div className="flex items-center gap-6">
+                {/* Subtitle Selector */}
+                {subtitles.length > 0 && (
+                    <div className="relative">
+                      <button 
+                        onClick={() => {
+                            setShowSubtitleMenu(!showSubtitleMenu);
+                            setShowSpeedMenu(false);
+                        }}
+                        className={`p-2 hover:bg-white/20 rounded-full transition-colors ${activeSubtitle !== 'off' ? 'text-netflix-red' : 'text-white'}`}
+                      >
+                        <Captions size={24} />
+                      </button>
+                      
+                      {showSubtitleMenu && (
+                        <div className="absolute right-0 top-full mt-4 w-48 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50">
+                          <button
+                            onClick={() => changeSubtitle('off')}
+                            className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${activeSubtitle === 'off' ? 'text-netflix-red font-bold' : ''}`}
+                          >
+                            Off
+                          </button>
+                          {subtitles.map((track) => (
+                            <button
+                              key={track.label}
+                              onClick={() => changeSubtitle(track.label)}
+                              className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${activeSubtitle === track.label ? 'text-netflix-red font-bold' : ''}`}
+                            >
+                              {track.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                )}
+
                 {/* Speed Selector */}
                 <div className="relative">
                   <button 
-                    onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                    onClick={() => {
+                        setShowSpeedMenu(!showSpeedMenu);
+                        setShowSubtitleMenu(false);
+                    }}
                     className="p-2 hover:bg-white/20 rounded-full transition-colors flex items-center gap-2"
                   >
                     <Settings size={24} />
@@ -245,7 +319,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                   </button>
                   
                   {showSpeedMenu && (
-                    <div className="absolute right-0 bottom-full mb-4 w-32 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50">
+                    <div className="absolute right-0 top-full mt-4 w-32 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50">
                       {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
                         <button
                           key={speed}

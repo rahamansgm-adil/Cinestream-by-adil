@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, X, Check, AlertCircle, Play, Plus, Info, Loader2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, Play, Plus, Info, Loader2, Trash2, ChevronDown, ChevronUp, Captions } from 'lucide-react';
 import { Movie, Episode } from '@/src/data/movies';
 import { cn } from '@/src/lib/utils';
 import { db, auth } from '@/src/lib/firebase';
@@ -42,6 +42,10 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
     duration: '',
     number: 1
   });
+
+  const [subtitles, setSubtitles] = useState<{ label: string, src: string, lang: string }[]>([]);
+  const [newSubtitle, setNewSubtitle] = useState({ label: '', src: '', lang: 'en' });
+  const [showSubtitleForm, setShowSubtitleForm] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showSuccess, setShowSuccess] = useState(false);
@@ -111,6 +115,7 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
           genres: contentGenreInput.split(',').map(g => g.trim()).filter(Boolean),
           cast: contentCastInput.split(',').map(c => c.trim()).filter(Boolean),
           contentType: formData.contentType,
+          subtitles: subtitles,
           episodes: formData.contentType === 'tv' ? episodes.map((ep, idx) => ({
             ...ep,
             id: ep.id || `ep-${Date.now()}-${idx}`,
@@ -358,6 +363,101 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                   </div>
                 </div>
               )}
+
+              {/* Subtitles Section */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    <Captions size={14} className="text-netflix-red" /> Subtitles ({subtitles.length})
+                  </label>
+                  <button 
+                    type="button"
+                    onClick={() => setShowSubtitleForm(!showSubtitleForm)}
+                    className="text-netflix-red text-xs font-bold uppercase tracking-widest flex items-center gap-1 hover:underline"
+                  >
+                    {showSubtitleForm ? <ChevronUp size={14} /> : <Plus size={14} />} 
+                    {showSubtitleForm ? 'Close' : 'Add Subtitle'}
+                  </button>
+                </div>
+
+                {showSubtitleForm && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="bg-zinc-800/30 p-6 rounded-lg border border-zinc-700 space-y-4 overflow-hidden"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Label</label>
+                        <input 
+                          type="text"
+                          placeholder="e.g. English"
+                          className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                          value={newSubtitle.label}
+                          onChange={e => setNewSubtitle({ ...newSubtitle, label: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Language Code</label>
+                        <input 
+                          type="text"
+                          placeholder="e.g. en"
+                          className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                          value={newSubtitle.lang}
+                          onChange={e => setNewSubtitle({ ...newSubtitle, lang: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subtitle URL (.vtt / .srt)</label>
+                        <input 
+                          type="text"
+                          placeholder="Direct Link or GDrive Link"
+                          className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                          value={newSubtitle.src}
+                          onChange={e => setNewSubtitle({ ...newSubtitle, src: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (newSubtitle.label && newSubtitle.src) {
+                          setSubtitles([...subtitles, newSubtitle]);
+                          setNewSubtitle({ label: '', src: '', lang: 'en' });
+                          setShowSubtitleForm(false);
+                        }
+                      }}
+                      className="w-full py-2 bg-white text-black font-bold uppercase text-[10px] tracking-widest rounded hover:bg-gray-200 transition-colors"
+                    >
+                      Add Subtitle Track
+                    </button>
+                  </motion.div>
+                )}
+
+                <div className="space-y-2">
+                  {subtitles.map((sub, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-zinc-800/50 rounded border border-white/5 group hover:border-white/20 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="px-2 py-0.5 bg-zinc-700 rounded text-[10px] font-bold text-gray-300 uppercase shrink-0">
+                          {sub.lang}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">{sub.label}</h4>
+                          <p className="text-[10px] text-gray-500 truncate max-w-[200px] md:max-w-md">{sub.src}</p>
+                        </div>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => setSubtitles(subtitles.filter((_, i) => i !== idx))}
+                        className="opacity-0 group-hover:opacity-100 p-2 text-gray-500 hover:text-red-500 transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Thumbnail Image URL</label>
