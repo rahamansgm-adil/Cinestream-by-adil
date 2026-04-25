@@ -5,6 +5,7 @@ import { Movie } from '@/src/data/movies';
 import { User as FirebaseUser } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
+import { useAuth } from '../context/AuthContext';
 
 interface MovieDetailsProps {
   movie: Movie | null;
@@ -14,6 +15,7 @@ interface MovieDetailsProps {
 }
 
 export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps) => {
+  const { isAdmin } = useAuth();
   const [showTrailer, setShowTrailer] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -35,7 +37,6 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
 
   if (!movie) return null;
 
-  const isAdmin = user && user.email === 'rahamansgmadil2@gmail.com';
   const isOwner = user && movie && (movie as any).createdBy === user.uid;
   const canDelete = isAdmin || isOwner;
 

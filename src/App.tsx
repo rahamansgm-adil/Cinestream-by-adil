@@ -13,6 +13,9 @@ import MovieRow from './components/MovieRow';
 import MovieDetails from './components/MovieDetails';
 import VideoPlayer from './components/VideoPlayer';
 import AddMovieForm from './components/AddMovieForm';
+import { AdminLogin } from './components/AdminLogin';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { useAuth } from './context/AuthContext';
 import { MOVIES as initialMovies, CATEGORIES, Movie } from './data/movies';
 import { db, auth, signInWithGoogle } from './lib/firebase';
 import { collection, query, orderBy, onSnapshot, getDocs, writeBatch, doc } from 'firebase/firestore';
@@ -24,8 +27,10 @@ export default function App() {
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [playingMovie, setPlayingMovie] = useState<Movie | null>(null);
   const [activeAddForm, setActiveAddForm] = useState<'movie' | 'tv' | null>(null);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const { isAdmin } = useAuth();
 
   // Combined and filtered movies
   const allMovies = useMemo(() => {
@@ -46,29 +51,6 @@ export default function App() {
       ))
     );
   }, [dbMovies, movies, searchQuery]);
-
-  useEffect(() => {
-    const isAdmin = user?.email === 'rahamansgmadil2@gmail.com';
-    const hasCleared = localStorage.getItem('initial_db_clear_v1');
-
-    if (isAdmin && !hasCleared) {
-      const clearAll = async () => {
-        try {
-          const querySnapshot = await getDocs(collection(db, 'movies'));
-          const batch = writeBatch(db);
-          querySnapshot.forEach((document) => {
-            batch.delete(doc(db, 'movies', document.id));
-          });
-          await batch.commit();
-          localStorage.setItem('initial_db_clear_v1', 'true');
-          window.location.reload();
-        } catch (error) {
-          console.error("Auto-clear failed:", error);
-        }
-      };
-      clearAll();
-    }
-  }, [user]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -139,6 +121,7 @@ export default function App() {
       <Navbar 
         onAddMovieClick={() => setActiveAddForm('movie')} 
         onAddTVShowClick={() => setActiveAddForm('tv')}
+        onAdminLoginClick={() => setShowAdminLogin(true)}
         user={user}
         onLogin={signInWithGoogle}
         onLogout={() => signOut(auth)}
@@ -246,11 +229,20 @@ export default function App() {
       {/* Admin Add Movie / TV Show Form Modal */}
       <AnimatePresence>
         {activeAddForm && (
-          <AddMovieForm 
-            type={activeAddForm}
-            onAdd={handleAddMovie}
-            onClose={() => setActiveAddForm(null)}
-          />
+          <ProtectedRoute>
+            <AddMovieForm 
+              type={activeAddForm}
+              onAdd={handleAddMovie}
+              onClose={() => setActiveAddForm(null)}
+            />
+          </ProtectedRoute>
+        )}
+      </AnimatePresence>
+
+      {/* Admin Login Modal */}
+      <AnimatePresence>
+        {showAdminLogin && (
+          <AdminLogin onClose={() => setShowAdminLogin(false)} />
         )}
       </AnimatePresence>
 

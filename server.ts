@@ -3,12 +3,20 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
 import axios from "axios";
+import jwt from "jsonwebtoken";
+import cookieParser from "cookie-parser";
+
+const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-for-dev";
+const ADMIN_USER = process.env.ADMIN_USERNAME || "admin";
+const ADMIN_PASS = process.env.ADMIN_PASSWORD || "password123";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(cors());
+  app.use(express.json());
+  app.use(cookieParser());
 
   // API Route for Google Drive Streaming Proxy
   app.get("/api/stream", async (req, res) => {
@@ -108,6 +116,48 @@ async function startServer() {
       console.error("Streaming error:", error.message);
       res.status(500).send("Error streaming from Google Drive. Ensure the file is shared as 'Anyone with the link can view'.");
     }
+  });
+
+  // Admin Authentication Route
+  app.post("/api/admin/login", (req, res) => {
+    const { username, password } = req.body;
+
+    if (username === ADMIN_USER && password === ADMIN_PASS) {
+      const token = jwt.sign({ role: "admin" }, JWT_SECRET, { expiresIn: "7d" });
+      
+      res.cookie("admin_token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+
+      return res.json({ success: true, isAdmin: true });
+    }
+
+    res.status(401).json({ success: false, message: "Invalid credentials" });
+  });
+
+  // Admin Verification Route
+  app.get("/api/admin/verify", (req, res) => {
+    const token = req.cookies.admin_token;
+
+    if (!token) {
+      return res.json({ isAdmin: false });
+    }
+
+    try {
+      jwt.verify(token, JWT_SECRET);
+      res.json({ isAdmin: true });
+    } catch (err) {
+      res.json({ isAdmin: false });
+    }
+  });
+
+  // Admin Logout Route
+  app.post("/api/admin/logout", (req, res) => {
+    res.clearCookie("admin_token");
+    res.json({ success: true });
   });
 
   // Vite middleware for development

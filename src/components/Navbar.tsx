@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, User, Menu, LogOut, LogIn, X } from 'lucide-react';
+import { Search, Bell, User, Menu, LogOut, LogIn, X, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { User as FirebaseUser } from 'firebase/auth';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   onAddMovieClick: () => void;
   onAddTVShowClick: () => void;
+  onAdminLoginClick: () => void;
   user: FirebaseUser | null;
   onLogin: () => void;
   onLogout: () => void;
@@ -16,12 +18,14 @@ interface NavbarProps {
 export const Navbar = ({ 
   onAddMovieClick, 
   onAddTVShowClick, 
+  onAdminLoginClick,
   user, 
   onLogin, 
   onLogout, 
   searchQuery, 
   setSearchQuery 
 }: NavbarProps) => {
+  const { isAdmin, logout: adminLogout } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -55,10 +59,13 @@ export const Navbar = ({
           <li className="hover:text-gray-400 cursor-pointer transition-colors">Movies</li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">New & Popular</li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">My List</li>
-          <div className="flex gap-2 ml-4">
-            <li onClick={onAddMovieClick} className="px-3 py-1 bg-netflix-red text-white text-[10px] font-bold rounded cursor-pointer hover:bg-[#ff0a16] transition-colors uppercase tracking-widest whitespace-nowrap">Add Movie</li>
-            <li onClick={onAddTVShowClick} className="px-3 py-1 bg-zinc-800 text-white text-[10px] font-bold rounded cursor-pointer hover:bg-zinc-700 transition-colors uppercase tracking-widest whitespace-nowrap border border-white/10">Add TV Show</li>
-          </div>
+          
+          {isAdmin && (
+            <div className="flex gap-2 ml-4">
+              <li onClick={onAddMovieClick} className="px-3 py-1 bg-netflix-red text-white text-[10px] font-bold rounded cursor-pointer hover:bg-[#ff0a16] transition-colors uppercase tracking-widest whitespace-nowrap">Add Movie</li>
+              <li onClick={onAddTVShowClick} className="px-3 py-1 bg-zinc-800 text-white text-[10px] font-bold rounded cursor-pointer hover:bg-zinc-700 transition-colors uppercase tracking-widest whitespace-nowrap border border-white/10">Add TV Show</li>
+            </div>
+          )}
         </ul>
       </div>
 
@@ -115,6 +122,25 @@ export const Navbar = ({
                   <p className="text-xs text-gray-400">Signed in as</p>
                   <p className="text-sm font-bold truncate">{user.displayName || user.email}</p>
                 </div>
+                
+                {!isAdmin && (
+                  <button 
+                    onClick={() => { onAdminLoginClick(); setShowProfileMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2 transition-colors border-b border-zinc-800"
+                  >
+                    <Settings size={16} /> Admin Panel
+                  </button>
+                )}
+
+                {isAdmin && (
+                  <button 
+                    onClick={() => { adminLogout(); setShowProfileMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2 transition-colors border-b border-zinc-800 text-netflix-red"
+                  >
+                    <Settings size={16} /> Exit Admin Dashboard
+                  </button>
+                )}
+
                 <button 
                   onClick={() => { onLogout(); setShowProfileMenu(false); }}
                   className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2 transition-colors"
