@@ -218,11 +218,11 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
             <div className="space-y-4 text-sm bg-zinc-800/30 p-6 rounded-lg border border-white/5">
               <div>
                 <span className="text-gray-500 font-bold">Cast: </span>
-                <span className="text-gray-300">{movie.cast.join(', ')}</span>
+                <span className="text-gray-300">{(movie.cast || []).join(', ')}</span>
               </div>
               <div>
                 <span className="text-gray-500 font-bold">Genres: </span>
-                <span className="text-gray-300">{movie.genres.join(', ')}</span>
+                <span className="text-gray-300">{(movie.genres || []).join(', ')}</span>
               </div>
               <div>
                 <span className="text-gray-500 font-bold">This {movie.contentType === 'tv' ? 'show' : 'movie'} is: </span>

@@ -43,4 +43,50 @@
   .movie-row-scroll::-webkit-scrollbar {
     display: none; /* Chrome, Safari, Edge */
   }
+
+  /* Video.js Overrides */
+  .video-js {
+    font-family: inherit;
+    width: 100% !important;
+    height: 100% !important;
+    background-color: transparent !important;
+  }
+
+  /* Force hide all default vjs elements when using custom UI */
+  .vjs-control-bar,
+  .vjs-big-play-button,
+  .vjs-error-display,
+  .vjs-loading-spinner,
+  .vjs-text-track-display {
+    display: none !important;
+  }
+
+  video:focus {
+    outline: none !important;
+  }
+
+  /* Custom Range Input Styling */
+  input[type="range"] {
+    @apply appearance-none bg-transparent;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    @apply appearance-none h-4 w-4 bg-netflix-red rounded-full cursor-pointer shadow-lg;
+    transform: scale(0);
+    transition: transform 0.2s ease;
+  }
+
+  .group\/progress:hover input[type="range"]::-webkit-slider-thumb {
+    transform: scale(1);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    @apply h-4 w-4 bg-netflix-red border-none rounded-full cursor-pointer shadow-lg;
+    transform: scale(0);
+    transition: transform 0.2s ease;
+  }
+
+  .group\/progress:hover input[type="range"]::-moz-range-thumb {
+    transform: scale(1);
+  }
 }

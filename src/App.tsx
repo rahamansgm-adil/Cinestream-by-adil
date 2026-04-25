@@ -43,8 +43,8 @@ export default function App() {
     return unique.filter(m => 
       m.title.toLowerCase().includes(query) ||
       m.description.toLowerCase().includes(query) ||
-      m.genres.some(g => g.toLowerCase().includes(query)) ||
-      m.cast.some(c => c.toLowerCase().includes(query)) ||
+      (m.genres || []).some(g => g.toLowerCase().includes(query)) ||
+      (m.cast || []).some(c => c.toLowerCase().includes(query)) ||
       (m.contentType === 'tv' && m.episodes?.some(ep => 
         ep.title.toLowerCase().includes(query) ||
         ep.description.toLowerCase().includes(query)
@@ -260,16 +260,13 @@ export default function App() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[1000] bg-black"
           >
-            <button 
-              onClick={handleClosePlayer}
-              className="absolute top-8 left-8 z-[1001] p-3 rounded-full bg-black/60 text-white hover:bg-black transition-colors"
-            >
-              <X size={32} />
-            </button>
-            
-            <div className="w-full h-full flex items-center justify-center">
+            <div className="w-full h-full">
               <VideoPlayer 
-                options={videoJsOptions} 
+                options={{
+                  ...videoJsOptions,
+                  controls: false // Force off, handled by custom UI
+                }} 
+                onBack={handleClosePlayer}
                 onReady={(player) => {
                   console.log('Video Player Ready');
                 }}

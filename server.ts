@@ -149,26 +149,25 @@ async function startServer() {
 
       // If Google returns an HTML page, it might be the virus scan warning
       const contentTypeCheck = initialResponse.headers['content-type'] as string | undefined;
-      if (contentTypeCheck?.includes('text/html') && initialResponse.data) {
+      if (contentTypeCheck?.includes('text/html')) {
         // Read just enough of the start to find the confirm token
-        const chunks: any[] = [];
+        let text = "";
         try {
           for await (const chunk of initialResponse.data) {
-            chunks.push(chunk);
-            const text = Buffer.concat(chunks).toString();
+            text += chunk.toString();
             const confirmMatch = text.match(/confirm=([a-zA-Z0-9\-_]+)/);
             if (confirmMatch && confirmMatch[1]) {
               driveUrl += `&confirm=${confirmMatch[1]}`;
-              console.log(`Found confirm token for drive file ${fileId}`);
+              console.log(`[Stream] Found confirm token for ${fileId}: ${confirmMatch[1]}`);
               break;
             }
-            if (text.length > 1024 * 100) break; // Don't read more than 100KB of HTML
+            if (text.length > 1024 * 50) break; // 50KB limit
           }
-        } catch (iterError) {
-          console.warn("Error reading confirmation stream:", iterError);
+        } catch (e) {
+          console.warn("Stream read error:", e);
         }
       }
-      if (initialResponse.data) initialResponse.data.destroy(); // Close the stream from the check
+      if (initialResponse.data) initialResponse.data.destroy();
 
       if (range) {
         headers['Range'] = range;
@@ -179,37 +178,27 @@ async function startServer() {
         url: driveUrl,
         responseType: 'stream',
         headers: headers,
-        maxRedirects: 10 // Increase max redirects for safety
+        timeout: 30000
       });
 
-      // Pass through headers from Google
       const contentType = driveResponse.headers['content-type'];
       const contentLength = driveResponse.headers['content-length'];
       const contentRange = driveResponse.headers['content-range'];
       const acceptRanges = (driveResponse.headers['accept-ranges'] as string) || 'bytes';
+      const outgoingContentType = contentType && contentType !== 'application/octet-stream' ? contentType : 'video/mp4';
 
-      // If Google doesn't provide a content-type or if it's application/octet-stream,
-      // we can try to be more helpful for the video player
-      let outgoingContentType = contentType as string;
-      if (!outgoingContentType || outgoingContentType === 'application/octet-stream') {
-        outgoingContentType = 'video/mp4'; 
-      }
-
-      // Set status code based on whether it's a partial content response
       res.status(driveResponse.status);
-      
-      res.setHeader('Content-Type', outgoingContentType);
-      if (contentLength) res.setHeader('Content-Length', contentLength as string);
-      if (contentRange) res.setHeader('Content-Range', contentRange as string);
-      res.setHeader('Accept-Ranges', acceptRanges);
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Access-Control-Allow-Origin', '*'); // Ensure CORS is open for the stream
+      res.setHeader('Content-Type', String(outgoingContentType));
+      res.setHeader('Content-Disposition', 'inline');
+      if (contentLength) res.setHeader('Content-Length', String(contentLength));
+      if (contentRange) res.setHeader('Content-Range', String(contentRange));
+      res.setHeader('Accept-Ranges', String(acceptRanges));
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Access-Control-Allow-Origin', '*'); 
 
       console.log(`[Stream] Streaming file ${fileId}`);
-      console.log(`[Stream] URL: ${driveUrl}`);
-      console.log(`[Stream] Status: ${driveResponse.status}`);
-      console.log(`[Stream] Content-Type: ${outgoingContentType}`);
-      console.log(`[Stream] Range: ${range || 'None'}`);
+      console.log(`[Stream] Status: ${driveResponse.status}, Content-Type: ${outgoingContentType}`);
+      console.log(`[Stream] Range: ${range || 'none'}`);
 
       // Handle client disconnects to prevent memory leaks or hanging streams
       req.on('close', () => {
