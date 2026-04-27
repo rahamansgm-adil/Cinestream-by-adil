@@ -5,6 +5,7 @@ import cors from "cors";
 import axios from "axios";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
@@ -64,10 +65,30 @@ async function startServer() {
   console.log("[EnvCheck] PROJECT_ID:", process.env.GOOGLE_CLOUD_PROJECT);
   console.log("[EnvCheck] FIREBASE_CONFIG:", process.env.FIREBASE_CONFIG ? "Exists" : "Missing");
 
+  // Advanced CORS Configuration for Media Streaming
   app.use(cors({
-    origin: true,
-    credentials: true
+    origin: (origin, callback) => {
+      // In development/AI Studio, we often allow all for convenience, but can be restricted
+      callback(null, true);
+    },
+    credentials: true,
+    exposedHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length', 'Content-Type']
   }));
+
+  // Security Headers using Helmet - Configured for Media/CORS 
+  app.use(helmet({
+    contentSecurityPolicy: false, // Temporarily disable to fix Firebase "network-request-failed" errors
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+  }));
+
+  // We still want to allow the app to be framed by AI Studio and Google Services
+  app.use((req, res, next) => {
+    res.setHeader("X-Frame-Options", "ALLOWALL");
+    next();
+  });
+
   app.use(express.json());
   app.use(cookieParser());
 

@@ -217,7 +217,8 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
 
         const headers = await getAuthHeaders();
         const response = await axios.post('/api/admin/add-content', movieData, { 
-          headers
+          headers,
+          withCredentials: true
         });
         
         console.log('Content saved successfully:', response.data.id);
@@ -277,70 +278,6 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* TMDB Search Integration */}
-            <div className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-700/50 mb-8">
-              <label className="text-[10px] font-bold text-netflix-red uppercase tracking-[0.2em] mb-2 block">Quick Import from TMDB</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                  <input 
-                    type="text"
-                    placeholder="Search movie or TV show title..."
-                    className="w-full bg-black/40 border border-zinc-700/50 pl-10 pr-4 py-2 text-white outline-none focus:border-netflix-red rounded-lg transition-all"
-                    value={tmdbSearch}
-                    onChange={e => setTmdbSearch(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleTmdbSearch())}
-                  />
-                </div>
-                <button 
-                  type="button"
-                  onClick={handleTmdbSearch}
-                  disabled={isSearchingTmdb || !tmdbSearch.trim()}
-                  className="px-6 bg-white text-black font-black uppercase text-xs tracking-widest rounded-lg hover:bg-gray-200 transition-all disabled:opacity-50"
-                >
-                  {isSearchingTmdb ? <Loader2 size={16} className="animate-spin" /> : 'Search'}
-                </button>
-              </div>
-
-              {/* TMDB Search Results Dropdown */}
-              <AnimatePresence>
-                {tmdbResults.length > 0 && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="mt-2 bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden shadow-2xl max-h-64 overflow-y-auto"
-                  >
-                    {tmdbResults.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => selectTmdbItem(item)}
-                        className="w-full p-3 flex items-center gap-4 hover:bg-zinc-800 border-b border-zinc-800 last:border-0 transition-colors text-left"
-                      >
-                        {item.poster_path ? (
-                          <img src={`https://image.tmdb.org/t/p/w92${item.poster_path}`} className="w-10 h-14 object-cover rounded" />
-                        ) : (
-                          <div className="w-10 h-14 bg-zinc-800 rounded flex items-center justify-center"><Play size={12} /></div>
-                        )}
-                        <div>
-                          <h4 className="font-bold text-white text-sm line-clamp-1">{item.title || item.name}</h4>
-                          <p className="text-[10px] text-gray-500 uppercase font-black tracking-tighter">
-                            {item.media_type || (type === 'movie' ? 'movie' : 'TV')} • {(item.release_date || item.first_air_date || '').split('-')[0]}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              {!tmdbApiKey && (
-                <p className="text-[10px] text-amber-500/80 mt-2 font-bold uppercase tracking-wider flex items-center gap-1">
-                  <Info size={12}/> Configure VITE_TMDB_API_KEY in settings to enable quick import
-                </p>
-              )}
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Title */}
               <div className="space-y-2">
@@ -723,6 +660,70 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                   onChange={e => setFormData({ ...formData, duration: e.target.value })}
                 />
               </div>
+            </div>
+
+            {/* TMDB Search Integration */}
+            <div className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-700/50">
+              <label className="text-[10px] font-bold text-netflix-red uppercase tracking-[0.2em] mb-2 block">Quick Import from TMDB</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                  <input 
+                    type="text"
+                    placeholder="Search movie or TV show title..."
+                    className="w-full bg-black/40 border border-zinc-700/50 pl-10 pr-4 py-2 text-white outline-none focus:border-netflix-red rounded-lg transition-all"
+                    value={tmdbSearch}
+                    onChange={e => setTmdbSearch(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleTmdbSearch())}
+                  />
+                </div>
+                <button 
+                  type="button"
+                  onClick={handleTmdbSearch}
+                  disabled={isSearchingTmdb || !tmdbSearch.trim()}
+                  className="px-6 bg-white text-black font-black uppercase text-xs tracking-widest rounded-lg hover:bg-gray-200 transition-all disabled:opacity-50"
+                >
+                  {isSearchingTmdb ? <Loader2 size={16} className="animate-spin" /> : 'Search'}
+                </button>
+              </div>
+
+              {/* TMDB Search Results Dropdown */}
+              <AnimatePresence>
+                {tmdbResults.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-2 bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden shadow-2xl max-h-64 overflow-y-auto"
+                  >
+                    {tmdbResults.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => selectTmdbItem(item)}
+                        className="w-full p-3 flex items-center gap-4 hover:bg-zinc-800 border-b border-zinc-800 last:border-0 transition-colors text-left"
+                      >
+                        {item.poster_path ? (
+                          <img src={`https://image.tmdb.org/t/p/w92${item.poster_path}`} className="w-10 h-14 object-cover rounded" />
+                        ) : (
+                          <div className="w-10 h-14 bg-zinc-800 rounded flex items-center justify-center"><Play size={12} /></div>
+                        )}
+                        <div>
+                          <h4 className="font-bold text-white text-sm line-clamp-1">{item.title || item.name}</h4>
+                          <p className="text-[10px] text-gray-500 uppercase font-black tracking-tighter">
+                            {item.media_type || (type === 'movie' ? 'movie' : 'TV')} • {(item.release_date || item.first_air_date || '').split('-')[0]}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {!tmdbApiKey && (
+                <p className="text-[10px] text-amber-500/80 mt-2 font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Info size={12}/> Configure VITE_TMDB_API_KEY in settings to enable quick import
+                </p>
+              )}
             </div>
 
             <button 

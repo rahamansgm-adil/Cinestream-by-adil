@@ -294,7 +294,7 @@ export default function App() {
                     src={playingMovie.videoUrl.startsWith('/') ? `https://www.vidking.net${playingMovie.videoUrl}` : playingMovie.videoUrl} 
                     className="w-full h-full border-0"
                     allowFullScreen
-                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture; xr-spatial-tracking; clipboard-write; gyroscope; accelerometer; microphone; camera"
                   />
                   <button 
                     onClick={handleClosePlayer}

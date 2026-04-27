@@ -45,6 +45,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
   const [subtitles, setSubtitles] = useState<any[]>([]);
   const [activeSubtitle, setActiveSubtitle] = useState<string>('off');
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -84,6 +85,21 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       responsive: true
     };
     
+    // Check for iframe sources (Vidking, etc)
+    const firstSource = options?.sources?.[0]?.src || '';
+    const isIframe = firstSource.includes('vidking.net') || 
+                     firstSource.includes('vidking.com') || 
+                     firstSource.includes('/embed/') ||
+                     firstSource.includes('youtube.com/embed') ||
+                     firstSource.includes('player.vimeo.com');
+
+    if (isIframe) {
+      setIframeUrl(firstSource);
+      return; // Skip video-js initialization for iframes
+    } else {
+      setIframeUrl(null);
+    }
+    
     // Convert Drive Source URLs
     if (modifiedOptions.sources) {
       modifiedOptions.sources = modifiedOptions.sources.map((s: any) => {
@@ -114,6 +130,9 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       const videoElement = document.createElement("video-js");
       videoElement.classList.add('vjs-big-play-centered');
       videoElement.classList.add('vjs-theme-netflix'); // Custom theme class
+      
+      // Add CORS attributes for streaming support
+      videoElement.setAttribute('crossorigin', 'anonymous');
       
       if (videoRef.current) {
         videoRef.current.appendChild(videoElement);
@@ -253,7 +272,18 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
-      <div ref={videoRef} className="w-full h-full" />
+      {iframeUrl ? (
+        <iframe
+          src={iframeUrl}
+          className="w-full h-full border-0 bg-black"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture; xr-spatial-tracking; clipboard-write; gyroscope; accelerometer; microphone; camera"
+          allowFullScreen
+          title="Video Player"
+          key={iframeUrl}
+        />
+      ) : (
+        <div ref={videoRef} className="w-full h-full" />
+      )}
 
       {/* Custom Controls Overlay */}
       <AnimatePresence>
@@ -263,27 +293,28 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute inset-0 z-10 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-none"
+            className={`absolute inset-0 z-10 flex flex-col justify-between ${iframeUrl ? 'pointer-events-none' : 'bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-auto'}`}
             onClick={(e) => {
-              if (e.target === e.currentTarget) {
+              if (e.target === e.currentTarget && !iframeUrl) {
                 togglePlay();
               }
             }}
           >
             {/* Top Bar */}
-            <div className="p-8 flex items-center justify-between pointer-events-auto">
+            <div className={`p-8 flex items-center justify-between pointer-events-auto ${iframeUrl ? 'bg-gradient-to-b from-black/80 to-transparent' : ''}`}>
               {onBack && (
                 <button 
                   onClick={onBack}
-                  className="p-2 transition-transform hover:scale-110 flex items-center gap-2 group"
+                  className="p-2 transition-transform hover:scale-110 flex items-center gap-2 group text-white drop-shadow-lg"
                 >
                   <ChevronLeft size={32} strokeWidth={2.5} />
                   <span className="text-xl font-medium opacity-0 group-hover:opacity-100 transition-opacity">Back</span>
                 </button>
               )}
-              <div className="flex items-center gap-6">
-                {/* Subtitle Selector */}
-                {subtitles.length > 0 && (
+              {!iframeUrl && (
+                <div className="flex items-center gap-6">
+                  {/* Subtitle Selector */}
+                  {subtitles.length > 0 && (
                     <div className="relative">
                       <button 
                         onClick={() => {
@@ -345,7 +376,8 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                   )}
                 </div>
               </div>
-            </div>
+            )}
+          </div>
 
             {/* Middle clickable area for play/pause toggle */}
             <div 
@@ -361,70 +393,72 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
             </div>
 
             {/* Bottom Controls */}
-            <div className="p-8 pb-10 space-y-4 pointer-events-auto">
-              {/* Progress Bar Container */}
-              <div className="group/progress relative h-2 w-full flex items-center">
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 100}
-                  step={0.1}
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="absolute inset-0 w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer accent-netflix-red hover:h-2 transition-all"
-                  style={{
-                    background: `linear-gradient(to right, #E50914 ${(currentTime / (duration || 1)) * 100}%, rgba(255,255,255,0.3) ${(currentTime / (duration || 1)) * 100}%)`
-                  }}
-                />
-              </div>
+            {!iframeUrl && (
+              <div className="p-8 pb-10 space-y-4 pointer-events-auto">
+                {/* Progress Bar Container */}
+                <div className="group/progress relative h-2 w-full flex items-center">
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 100}
+                    step={0.1}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="absolute inset-0 w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer accent-netflix-red hover:h-2 transition-all"
+                    style={{
+                      background: `linear-gradient(to right, #E50914 ${(currentTime / (duration || 1)) * 100}%, rgba(255,255,255,0.3) ${(currentTime / (duration || 1)) * 100}%)`
+                    }}
+                  />
+                </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                  {/* Play/Pause */}
-                  <button onClick={togglePlay} className="transition-transform hover:scale-110">
-                    {isPlaying ? <Pause size={32} fill="white" /> : <Play size={32} fill="white" />}
-                  </button>
-
-                  {/* Skip Rewind/Forward */}
-                  <button onClick={() => skip(-10)} className="group/skip flex flex-col items-center">
-                    <RotateCcw size={24} className="group-hover/skip:animate-pulse" />
-                    <span className="text-[10px] font-bold mt-1">10</span>
-                  </button>
-                  <button onClick={() => skip(10)} className="group/skip flex flex-col items-center">
-                    <RotateCw size={24} className="group-hover/skip:animate-pulse" />
-                    <span className="text-[10px] font-bold mt-1">10</span>
-                  </button>
-
-                  {/* Volume */}
-                  <div className="flex items-center gap-3 group/volume">
-                    <button onClick={toggleMute} className="transition-transform hover:scale-110">
-                      {isMuted || volume === 0 ? <VolumeX size={24} /> : <Volume2 size={24} />}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    {/* Play/Pause */}
+                    <button onClick={togglePlay} className="transition-transform hover:scale-110">
+                      {isPlaying ? <Pause size={32} fill="white" /> : <Play size={32} fill="white" />}
                     </button>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={isMuted ? 0 : volume}
-                      onChange={handleVolumeChange}
-                      className="w-0 group-hover/volume:w-24 transition-all duration-300 appearance-none bg-white/30 h-1 rounded-full accent-white"
-                    />
+
+                    {/* Skip Rewind/Forward */}
+                    <button onClick={() => skip(-10)} className="group/skip flex flex-col items-center">
+                      <RotateCcw size={24} className="group-hover/skip:animate-pulse" />
+                      <span className="text-[10px] font-bold mt-1">10</span>
+                    </button>
+                    <button onClick={() => skip(10)} className="group/skip flex flex-col items-center">
+                      <RotateCw size={24} className="group-hover/skip:animate-pulse" />
+                      <span className="text-[10px] font-bold mt-1">10</span>
+                    </button>
+
+                    {/* Volume */}
+                    <div className="flex items-center gap-3 group/volume">
+                      <button onClick={toggleMute} className="transition-transform hover:scale-110">
+                        {isMuted || volume === 0 ? <VolumeX size={24} /> : <Volume2 size={24} />}
+                      </button>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={isMuted ? 0 : volume}
+                        onChange={handleVolumeChange}
+                        className="w-0 group-hover/volume:w-24 transition-all duration-300 appearance-none bg-white/30 h-1 rounded-full accent-white"
+                      />
+                    </div>
+
+                    {/* Time */}
+                    <div className="text-sm font-medium tracking-wider">
+                      {formatTime(currentTime)} / {formatTime(duration)}
+                    </div>
                   </div>
 
-                  {/* Time */}
-                  <div className="text-sm font-medium tracking-wider">
-                    {formatTime(currentTime)} / {formatTime(duration)}
+                  <div className="flex items-center gap-4">
+                    {/* Fullscreen */}
+                    <button onClick={toggleFullscreen} className="p-2 transition-transform hover:scale-110">
+                      {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
+                    </button>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  {/* Fullscreen */}
-                  <button onClick={toggleFullscreen} className="p-2 transition-transform hover:scale-110">
-                    {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
-                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
