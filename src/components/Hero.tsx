@@ -30,6 +30,16 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
   if (!movie) return null;
 
   const isYouTube = movie.trailerUrl?.includes('youtube.com') || movie.trailerUrl?.includes('youtu.be');
+  const normalizedTrailerUrl = movie.trailerUrl?.startsWith('/') 
+    ? `https://www.vidking.net${movie.trailerUrl}` 
+    : movie.trailerUrl;
+
+  const isEmbed = normalizedTrailerUrl?.includes('vidking.net') || 
+                  normalizedTrailerUrl?.includes('vidking.com') || 
+                  normalizedTrailerUrl?.includes('/embed/') ||
+                  normalizedTrailerUrl?.includes('player.') ||
+                  normalizedTrailerUrl?.includes('vimeo.com');
+
   const getYouTubeId = (url: string) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
@@ -93,10 +103,19 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
                     title="Hero Trailer"
                   />
                 </div>
+              ) : isEmbed ? (
+                <div className="w-full h-full pointer-events-none">
+                  <iframe
+                    className="w-full h-full border-0"
+                    src={normalizedTrailerUrl + (normalizedTrailerUrl?.includes('?') ? '&' : '?') + 'autoplay=1&mute=1&controls=0'}
+                    allow="autoplay; fullscreen; encrypted-media"
+                    title="Hero Trailer"
+                  />
+                </div>
               ) : (
                 <video
                   ref={videoRef}
-                  src={movie.trailerUrl}
+                  src={normalizedTrailerUrl}
                   autoPlay
                   muted={isMuted}
                   loop
@@ -175,7 +194,7 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
       </div>
 
       {/* Mute Toggle */}
-      {showTrailer && movie.trailerUrl && !isYouTube && (
+      {showTrailer && movie.trailerUrl && !isYouTube && !isEmbed && (
         <motion.button 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

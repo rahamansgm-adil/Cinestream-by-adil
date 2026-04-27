@@ -86,7 +86,11 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
     };
     
     // Check for iframe sources (Vidking, etc)
-    const firstSource = options?.sources?.[0]?.src || '';
+    let firstSource = options?.sources?.[0]?.src || '';
+    if (firstSource.startsWith('/')) {
+      firstSource = `https://www.vidking.net${firstSource}`;
+    }
+
     const isIframe = firstSource.includes('vidking.net') || 
                      firstSource.includes('vidking.com') || 
                      firstSource.includes('/embed/') ||
