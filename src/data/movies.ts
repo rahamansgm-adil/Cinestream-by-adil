@@ -7,6 +7,7 @@ export interface Subtitle {
 export interface Episode {
   id: string;
   number: number;
+  seasonNumber?: number;
   title: string;
   description: string;
   videoUrl: string;

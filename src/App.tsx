@@ -182,7 +182,7 @@ export default function App() {
                   onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
                 />
               ))}
-              
+
               {dbMovies.filter(m => m.contentType === 'tv').length > 0 && (
                 <MovieRow 
                   key="tv-shows-community"
@@ -192,11 +192,11 @@ export default function App() {
                 />
               )}
 
-              {dbMovies.filter(m => m.contentType !== 'tv').length > 0 && (
+              {dbMovies.length > 0 && (
                 <MovieRow 
                   key="added-by-community"
                   title="Community Picks"
-                  movies={dbMovies.filter(m => m.contentType !== 'tv')}
+                  movies={dbMovies}
                   onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
                 />
               )}

@@ -40,7 +40,8 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
     description: '',
     videoUrl: '',
     duration: '',
-    number: 1
+    number: 1,
+    seasonNumber: 1
   });
 
   const [subtitles, setSubtitles] = useState<{ label: string, src: string, lang: string }[]>([]);
@@ -55,8 +56,71 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
   const [tmdbSearch, setTmdbSearch] = useState('');
   const [tmdbResults, setTmdbResults] = useState<any[]>([]);
   const [isSearchingTmdb, setIsSearchingTmdb] = useState(false);
+  const [currentTmdbId, setCurrentTmdbId] = useState<number | null>(null);
+  const [seasonToFetch, setSeasonToFetch] = useState(1);
+  const [isFetchingSeason, setIsFetchingSeason] = useState(false);
+  const [multiSeasonInput, setMultiSeasonInput] = useState('');
 
   const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
+
+  const fetchSeason = async (seasonNum: number, append = false) => {
+    if (!currentTmdbId || !tmdbApiKey) return;
+    setIsFetchingSeason(true);
+    try {
+      const response = await axios.get(`https://api.themoviedb.org/3/tv/${currentTmdbId}/season/${seasonNum}`, {
+        params: { api_key: tmdbApiKey, language: 'en-US' }
+      });
+      const data = response.data;
+      const fetchedEpisodes = data.episodes.map((ep: any) => ({
+        id: `tmdb-${ep.id}`,
+        number: ep.episode_number,
+        seasonNumber: seasonNum,
+        title: ep.name,
+        description: ep.overview,
+        videoUrl: '', 
+        duration: '45m',
+        thumbnailUrl: ep.still_path ? `https://image.tmdb.org/t/p/w500${ep.still_path}` : ''
+      }));
+      
+      if (append) {
+        setEpisodes(prev => [...prev, ...fetchedEpisodes]);
+      } else {
+        setEpisodes(fetchedEpisodes);
+      }
+    } catch (error) {
+      console.error(`Fetch Season ${seasonNum} Error:`, error);
+    } finally {
+      setIsFetchingSeason(false);
+    }
+  };
+
+  const fetchMultipleSeasons = async () => {
+    if (!currentTmdbId || !tmdbApiKey || !multiSeasonInput.trim()) return;
+    
+    // Parse input (supports "1-3" or "1,2,3")
+    let seasons: number[] = [];
+    if (multiSeasonInput.includes('-')) {
+      const [start, end] = multiSeasonInput.split('-').map(Number);
+      if (!isNaN(start) && !isNaN(end)) {
+        for (let i = start; i <= end; i++) seasons.push(i);
+      }
+    } else {
+      seasons = multiSeasonInput.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    }
+
+    if (seasons.length === 0) return;
+
+    setIsFetchingSeason(true);
+    setEpisodes([]); // Clear current list for a fresh batch import
+    
+    try {
+      for (const seasonNum of seasons) {
+        await fetchSeason(seasonNum, true);
+      }
+    } finally {
+      setIsFetchingSeason(false);
+    }
+  };
 
   const handleTmdbSearch = async () => {
     if (!tmdbSearch.trim() || !tmdbApiKey) return;
@@ -95,6 +159,7 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
       });
 
       const data = detailResponse.data;
+      setCurrentTmdbId(item.id);
       
       // Determine Rating
       let rating = 'PG-13';
@@ -118,6 +183,11 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
         trailerUrl: data.videos?.results?.find((v: any) => v.type === 'Trailer')?.key ? `https://www.youtube.com/watch?v=${data.videos.results.find((v: any) => v.type === 'Trailer').key}` : '',
         contentType: mediaType === 'movie' ? 'movie' : 'tv'
       });
+
+      // Fetch episodes for TV shows
+      if (mediaType === 'tv') {
+        fetchSeason(1);
+      }
 
       setContentGenreInput(data.genres?.map((g: any) => g.name).join(', ') || '');
       setContentCastInput(data.credits?.cast?.slice(0, 10).map((c: any) => c.name).join(', ') || '');
@@ -370,14 +440,68 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                 <div className="md:col-span-2 space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Episodes ({episodes.length})</label>
-                    <button 
-                      type="button"
-                      onClick={() => setShowEpisodeForm(!showEpisodeForm)}
-                      className="text-netflix-red text-xs font-bold uppercase tracking-widest flex items-center gap-1 hover:underline"
-                    >
-                      {showEpisodeForm ? <ChevronUp size={14} /> : <Plus size={14} />} 
-                      {showEpisodeForm ? 'Close' : 'Add Episode'}
-                    </button>
+                    <div className="flex flex-col gap-3">
+                      {currentTmdbId && (
+                        <div className="flex flex-wrap items-center gap-3 bg-zinc-800/30 p-3 rounded-lg border border-zinc-700/50">
+                          {/* Single Season Import */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Season</span>
+                            <div className="flex items-center bg-zinc-900 border border-zinc-700 rounded overflow-hidden">
+                              <input 
+                                type="number"
+                                min="1"
+                                className="w-12 bg-transparent text-xs text-white px-2 py-1 outline-none font-bold text-center"
+                                value={seasonToFetch}
+                                onChange={e => setSeasonToFetch(parseInt(e.target.value) || 1)}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => fetchSeason(seasonToFetch)}
+                                disabled={isFetchingSeason}
+                                className="px-3 py-1 bg-zinc-800 text-white text-[10px] font-bold hover:bg-zinc-700 transition-colors disabled:opacity-50 border-l border-zinc-700"
+                              >
+                                {isFetchingSeason ? <Loader2 size={10} className="animate-spin" /> : 'Get'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="h-4 w-[1px] bg-zinc-700" />
+
+                          {/* Multi-Season Import */}
+                          <div className="flex items-center gap-2 flex-grow">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bulk Import</span>
+                            <div className="flex flex-grow items-center bg-zinc-900 border border-zinc-700 rounded overflow-hidden">
+                              <input 
+                                type="text"
+                                placeholder='e.g. "1-5" or "1,2,4"'
+                                className="flex-grow bg-transparent text-xs text-white px-3 py-1 outline-none placeholder:text-zinc-600"
+                                value={multiSeasonInput}
+                                onChange={e => setMultiSeasonInput(e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                onClick={fetchMultipleSeasons}
+                                disabled={isFetchingSeason || !multiSeasonInput.trim()}
+                                className="px-4 py-1 bg-netflix-red text-white text-[10px] font-bold hover:bg-red-600 transition-colors disabled:opacity-30 border-l border-zinc-700"
+                              >
+                                {isFetchingSeason ? <Loader2 size={10} className="animate-spin" /> : 'Import All'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-end">
+                        <button 
+                          type="button"
+                          onClick={() => setShowEpisodeForm(!showEpisodeForm)}
+                          className="text-netflix-red text-xs font-bold uppercase tracking-widest flex items-center gap-1 hover:underline px-2 py-1"
+                        >
+                          {showEpisodeForm ? <ChevronUp size={14} /> : <Plus size={14} />} 
+                          {showEpisodeForm ? 'Close manual form' : 'Add Single Episode Manually'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {showEpisodeForm && (
@@ -427,6 +551,16 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                             onChange={e => setNewEpisode({ ...newEpisode, number: parseInt(e.target.value) })}
                           />
                         </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Season Number</label>
+                          <input 
+                            type="number"
+                            min="1"
+                            className="w-full bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-transparent focus:border-netflix-red rounded transition-all"
+                            value={newEpisode.seasonNumber}
+                            onChange={e => setNewEpisode({ ...newEpisode, seasonNumber: parseInt(e.target.value) || 1 })}
+                          />
+                        </div>
                         <div className="md:col-span-2 space-y-1">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Summary</label>
                           <textarea 
@@ -449,7 +583,8 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                               description: '', 
                               videoUrl: '', 
                               duration: '', 
-                              number: (newEpisode.number || 0) + 1 
+                              number: (newEpisode.number || 0) + 1,
+                              seasonNumber: newEpisode.seasonNumber || 1
                             });
                             if (episodes.length > 0) setShowEpisodeForm(false);
                           }
@@ -461,27 +596,48 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                     </motion.div>
                   )}
 
-                  <div className="space-y-2">
-                    {episodes.map((ep, idx) => (
-                      <div key={ep.id} className="flex items-center justify-between p-3 bg-zinc-800/50 rounded border border-white/5 group hover:border-white/20 transition-all">
-                        <div className="flex items-center gap-4">
-                          <span className="text-netflix-red font-black text-sm w-6">{ep.number}</span>
-                          <div>
-                            <h4 className="text-sm font-bold text-white">{ep.title}</h4>
-                            <p className="text-[10px] text-gray-500 truncate max-w-[200px] md:max-w-md">{ep.description || 'No description'}</p>
+                    <div className="space-y-3">
+                      {episodes.map((ep, idx) => (
+                        <div key={ep.id} className="p-4 bg-zinc-800/40 rounded-lg border border-zinc-700/50 hover:border-zinc-500/50 transition-all space-y-3 group">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-netflix-red font-black text-base w-6">{ep.number}</span>
+                              <div className="flex-1">
+                                <h4 className="text-sm font-bold text-white group-hover:text-netflix-red transition-colors">{ep.title} {ep.seasonNumber && <span className="text-[10px] text-gray-500 ml-2">(S{ep.seasonNumber})</span>}</h4>
+                                <p className="text-[10px] text-gray-500 line-clamp-1 max-w-xs">{ep.description || 'No description provided'}</p>
+                              </div>
+                            </div>
+                            <button 
+                              type="button"
+                              onClick={() => setEpisodes(episodes.filter((_, i) => i !== idx))}
+                              className="p-1 text-gray-500 hover:text-red-500 transition-colors"
+                              title="Remove Episode"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          
+                          <div className="pl-9 space-y-1">
+                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Video URL for Episode {ep.number}</label>
+                            <div className="relative">
+                              <Play size={10} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                              <input 
+                                type="text"
+                                placeholder="Paste direct link or embed URL..."
+                                className="w-full bg-black/60 border border-zinc-700 px-8 py-2 text-[11px] text-white outline-none focus:border-netflix-red rounded-md transition-all placeholder:text-zinc-600"
+                                value={ep.videoUrl || ''}
+                                onChange={e => {
+                                  const updatedEpisodes = [...episodes];
+                                  updatedEpisodes[idx] = { ...updatedEpisodes[idx], videoUrl: e.target.value };
+                                  setEpisodes(updatedEpisodes);
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
-                        <button 
-                          type="button"
-                          onClick={() => setEpisodes(episodes.filter((_, i) => i !== idx))}
-                          className="opacity-0 group-hover:opacity-100 p-2 text-gray-500 hover:text-red-500 transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                    {errors.episodes && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={12}/> {errors.episodes}</p>}
-                  </div>
+                      ))}
+                      {errors.episodes && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={12}/> {errors.episodes}</p>}
+                    </div>
                 </div>
               )}
 
