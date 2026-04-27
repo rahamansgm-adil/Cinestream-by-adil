@@ -5,7 +5,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { X, LogIn, LogOut, Plus } from 'lucide-react';
+import { X, LogIn, LogOut, Plus, ChevronLeft } from 'lucide-react';
 import { cn } from './lib/utils';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -103,8 +103,18 @@ export default function App() {
     console.log('Video Player Ready');
   }, []);
 
+  const isEmbed = useMemo(() => {
+    if (!playingMovie) return false;
+    const url = playingMovie.videoUrl || '';
+    return url.includes('vidking.net') || 
+           url.includes('youtube.com/embed') || 
+           url.includes('vimeo.com/video') ||
+           url.includes('player.') ||
+           url.startsWith('/embed/');
+  }, [playingMovie]);
+
   const videoJsOptions = useMemo(() => {
-    if (!playingMovie) return null;
+    if (!playingMovie || isEmbed) return null;
     
     const url = playingMovie.videoUrl.toLowerCase();
     let src = playingMovie.videoUrl;
@@ -270,22 +280,39 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {playingMovie && videoJsOptions && (
+        {playingMovie && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[1000] bg-black"
           >
-            <div className="w-full h-full">
-              <VideoPlayer 
-                options={{
-                  ...videoJsOptions,
-                  controls: false // Force off, handled by custom UI
-                }} 
-                onBack={handleClosePlayer}
-                onReady={handlePlayerReady}
-              />
+            <div className="w-full h-full relative group">
+              {isEmbed ? (
+                <div className="w-full h-full relative">
+                  <iframe 
+                    src={playingMovie.videoUrl.startsWith('/') ? `https://www.vidking.net${playingMovie.videoUrl}` : playingMovie.videoUrl} 
+                    className="w-full h-full border-0"
+                    allowFullScreen
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                  />
+                  <button 
+                    onClick={handleClosePlayer}
+                    className="absolute top-8 left-8 p-3 bg-black/50 hover:bg-white/20 rounded-full transition-all text-white z-[1001] opacity-0 group-hover:opacity-100"
+                  >
+                    <ChevronLeft size={32} />
+                  </button>
+                </div>
+              ) : videoJsOptions && (
+                <VideoPlayer 
+                  options={{
+                    ...videoJsOptions,
+                    controls: false // Force off, handled by custom UI
+                  }} 
+                  onBack={handleClosePlayer}
+                  onReady={handlePlayerReady}
+                />
+              )}
             </div>
           </motion.div>
         )}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, X, Check, AlertCircle, Play, Plus, Info, Loader2, Trash2, ChevronDown, ChevronUp, Captions } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, Play, Plus, Info, Loader2, Trash2, ChevronDown, ChevronUp, Captions, Search } from 'lucide-react';
 import { Movie, Episode } from '@/src/data/movies';
 import { cn } from '@/src/lib/utils';
 import { db, auth } from '@/src/lib/firebase';
@@ -52,6 +52,84 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [contentGenreInput, setContentGenreInput] = useState('');
   const [contentCastInput, setContentCastInput] = useState('');
+  const [tmdbSearch, setTmdbSearch] = useState('');
+  const [tmdbResults, setTmdbResults] = useState<any[]>([]);
+  const [isSearchingTmdb, setIsSearchingTmdb] = useState(false);
+
+  const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
+
+  const handleTmdbSearch = async () => {
+    if (!tmdbSearch.trim() || !tmdbApiKey) return;
+    setIsSearchingTmdb(true);
+    try {
+      const response = await axios.get(`https://api.themoviedb.org/3/search/multi`, {
+        params: {
+          api_key: tmdbApiKey,
+          query: tmdbSearch,
+          language: 'en-US',
+          page: 1,
+          include_adult: false
+        }
+      });
+      const filteredResults = response.data.results.filter((res: any) => 
+        res.media_type === (type === 'movie' ? 'movie' : 'tv') || res.media_type === 'movie' || res.media_type === 'tv'
+      );
+      setTmdbResults(filteredResults);
+    } catch (error) {
+      console.error("TMDB Search Error:", error);
+    } finally {
+      setIsSearchingTmdb(false);
+    }
+  };
+
+  const selectTmdbItem = async (item: any) => {
+    const mediaType = item.media_type || (type === 'movie' ? 'movie' : 'tv');
+    setIsSearchingTmdb(true);
+    try {
+      // Get detailed info including credits
+      const detailResponse = await axios.get(`https://api.themoviedb.org/3/${mediaType}/${item.id}`, {
+        params: {
+          api_key: tmdbApiKey,
+          append_to_response: 'credits,videos,release_dates,content_ratings'
+        }
+      });
+
+      const data = detailResponse.data;
+      
+      // Determine Rating
+      let rating = 'PG-13';
+      if (mediaType === 'movie') {
+        const release = data.release_dates?.results?.find((r: any) => r.iso_3166_1 === 'US');
+        rating = release?.release_dates?.[0]?.certification || 'PG-13';
+      } else {
+        const contentRating = data.content_ratings?.results?.find((r: any) => r.iso_3166_1 === 'US');
+        rating = contentRating?.rating || 'TV-14';
+      }
+
+      setFormData({
+        ...formData,
+        title: data.title || data.name,
+        description: data.overview,
+        thumbnailUrl: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : '',
+        bannerUrl: data.backdrop_path ? `https://image.tmdb.org/t/p/original${data.backdrop_path}` : '',
+        year: (data.release_date || data.first_air_date || '').split('-')[0] || '2024',
+        rating,
+        duration: mediaType === 'movie' ? `${Math.floor(data.runtime / 60)}h ${data.runtime % 60}m` : `${data.number_of_seasons} Seasons`,
+        trailerUrl: data.videos?.results?.find((v: any) => v.type === 'Trailer')?.key ? `https://www.youtube.com/watch?v=${data.videos.results.find((v: any) => v.type === 'Trailer').key}` : '',
+        contentType: mediaType === 'movie' ? 'movie' : 'tv'
+      });
+
+      setContentGenreInput(data.genres?.map((g: any) => g.name).join(', ') || '');
+      setContentCastInput(data.credits?.cast?.slice(0, 10).map((c: any) => c.name).join(', ') || '');
+      
+      setTmdbResults([]);
+      setTmdbSearch('');
+    } catch (error) {
+      console.error("TMDB Detail Error:", error);
+    } finally {
+      setIsSearchingTmdb(false);
+    }
+  };
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -68,15 +146,19 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
         const isDriveUrl = videoUrl.includes('drive.google.com/uc?export=download&id=') || 
                            videoUrl.includes('drive.google.com/file/d/') ||
                            videoUrl.includes('id=');
+        const isEmbedUrl = videoUrl.includes('vidking.net') || 
+                           videoUrl.includes('youtube.com/embed') || 
+                           videoUrl.includes('vimeo.com/video') ||
+                           videoUrl.startsWith('/embed/');
         const isArchiveUrl = videoUrl.includes('archive.org/');
         const isValidFormat = videoUrl.endsWith('.m3u8') || 
                               videoUrl.endsWith('.mp4') || 
                               videoUrl.endsWith('.mkv') || 
                               videoUrl.endsWith('.webm') ||
-                              isDriveUrl || isArchiveUrl;
+                              isDriveUrl || isArchiveUrl || isEmbedUrl;
         
         if (!isValidFormat) {
-          newErrors.videoUrl = 'Use .mp4, .m3u8, .mkv, .webm, Google Drive or Archive.org link';
+          newErrors.videoUrl = 'Use .mp4, .m3u8, .mkv, .webm, Google Drive, Embed link or Archive.org link';
         }
       }
     } else {
@@ -195,6 +277,70 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* TMDB Search Integration */}
+            <div className="bg-zinc-800/30 p-4 rounded-xl border border-zinc-700/50 mb-8">
+              <label className="text-[10px] font-bold text-netflix-red uppercase tracking-[0.2em] mb-2 block">Quick Import from TMDB</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                  <input 
+                    type="text"
+                    placeholder="Search movie or TV show title..."
+                    className="w-full bg-black/40 border border-zinc-700/50 pl-10 pr-4 py-2 text-white outline-none focus:border-netflix-red rounded-lg transition-all"
+                    value={tmdbSearch}
+                    onChange={e => setTmdbSearch(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleTmdbSearch())}
+                  />
+                </div>
+                <button 
+                  type="button"
+                  onClick={handleTmdbSearch}
+                  disabled={isSearchingTmdb || !tmdbSearch.trim()}
+                  className="px-6 bg-white text-black font-black uppercase text-xs tracking-widest rounded-lg hover:bg-gray-200 transition-all disabled:opacity-50"
+                >
+                  {isSearchingTmdb ? <Loader2 size={16} className="animate-spin" /> : 'Search'}
+                </button>
+              </div>
+
+              {/* TMDB Search Results Dropdown */}
+              <AnimatePresence>
+                {tmdbResults.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-2 bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden shadow-2xl max-h-64 overflow-y-auto"
+                  >
+                    {tmdbResults.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => selectTmdbItem(item)}
+                        className="w-full p-3 flex items-center gap-4 hover:bg-zinc-800 border-b border-zinc-800 last:border-0 transition-colors text-left"
+                      >
+                        {item.poster_path ? (
+                          <img src={`https://image.tmdb.org/t/p/w92${item.poster_path}`} className="w-10 h-14 object-cover rounded" />
+                        ) : (
+                          <div className="w-10 h-14 bg-zinc-800 rounded flex items-center justify-center"><Play size={12} /></div>
+                        )}
+                        <div>
+                          <h4 className="font-bold text-white text-sm line-clamp-1">{item.title || item.name}</h4>
+                          <p className="text-[10px] text-gray-500 uppercase font-black tracking-tighter">
+                            {item.media_type || (type === 'movie' ? 'movie' : 'TV')} • {(item.release_date || item.first_air_date || '').split('-')[0]}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {!tmdbApiKey && (
+                <p className="text-[10px] text-amber-500/80 mt-2 font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Info size={12}/> Configure VITE_TMDB_API_KEY in settings to enable quick import
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Title */}
               <div className="space-y-2">
