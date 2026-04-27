@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, LogIn, LogOut, Plus, ChevronLeft } from 'lucide-react';
 import { cn } from './lib/utils';
@@ -18,13 +18,21 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 import { MOVIES as initialMovies, CATEGORIES, Movie } from './data/movies';
 import { db, auth, signInWithGoogle } from './lib/firebase';
-import { collection, query, orderBy, onSnapshot, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDocs, writeBatch, doc, setDoc, serverTimestamp, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { UserProgress } from './data/movies';
 
 export default function App() {
   const [movies, setMovies] = useState<Movie[]>(initialMovies);
   const [dbMovies, setDbMovies] = useState<Movie[]>([]);
+  const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
+  const progressRef = useRef<UserProgress[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+
+  useEffect(() => {
+    progressRef.current = userProgress;
+  }, [userProgress]);
+
   const [playingMovie, setPlayingMovie] = useState<Movie | null>(null);
   const [activeAddForm, setActiveAddForm] = useState<'movie' | 'tv' | null>(null);
   const [showUserLogin, setShowUserLogin] = useState(false);
@@ -78,11 +86,44 @@ export default function App() {
       setDbMovies(fetchedMovies);
     });
 
+    let unsubscribeProgress = () => {};
+    if (user) {
+      const progressQuery = query(
+        collection(db, 'userProgress'), 
+        where('userId', '==', user.uid),
+        orderBy('lastWatched', 'desc')
+      );
+      unsubscribeProgress = onSnapshot(progressQuery, (snapshot) => {
+        const fetchedProgress = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as UserProgress));
+        setUserProgress(fetchedProgress);
+      });
+    } else {
+      setUserProgress([]);
+    }
+
     return () => {
       unsubscribeAuth();
       unsubscribeMovies();
+      unsubscribeProgress();
     };
-  }, []);
+  }, [user]);
+
+  const continueWatchingMovies = useMemo(() => {
+    if (!user || userProgress.length === 0) return [];
+    
+    return userProgress.map(progress => {
+      const movie = allMovies.find(m => m.id === progress.movieId);
+      if (!movie) return null;
+      
+      return {
+        ...movie,
+        progress: progress.progress,
+        totalDuration: progress.duration,
+        progressId: progress.id
+      };
+    }).filter(Boolean) as (Movie & { progress: number; totalDuration: number; progressId: string })[];
+  }, [allMovies, userProgress, user]);
 
   const featuredMovie = allMovies[0];
 
@@ -100,8 +141,36 @@ export default function App() {
   }, []);
 
   const handlePlayerReady = useCallback((player: any) => {
-    console.log('Video Player Ready');
-  }, []);
+    if (playingMovie && user) {
+      // Find existing progress from ref to avoid dependency cycle
+      const existingProgress = progressRef.current.find(p => p.movieId === playingMovie.id);
+      if (existingProgress && existingProgress.progress > 5) {
+         player.currentTime(existingProgress.progress);
+      }
+
+      let lastSavedTime = 0;
+      player.on('timeupdate', () => {
+        const currentTime = player.currentTime();
+        const duration = player.duration();
+        
+        // Save every 10 seconds or if substantial change
+        if (currentTime - lastSavedTime > 10 || Math.abs(currentTime - lastSavedTime) > 10) {
+          lastSavedTime = currentTime;
+          
+          const progressId = `${user.uid}_${playingMovie.id}`;
+          setDoc(doc(db, 'userProgress', progressId), {
+            movieId: playingMovie.id,
+            userId: user.uid,
+            progress: currentTime,
+            duration: duration,
+            lastWatched: serverTimestamp(),
+            contentType: playingMovie.contentType || 'movie',
+            episodeId: playingMovie.contentType === 'tv' ? playingMovie.id : null
+          }, { merge: true }).catch(err => console.error("Error saving progress:", err));
+        }
+      });
+    }
+  }, [playingMovie, user]);
 
   const isEmbed = useMemo(() => {
     if (!playingMovie) return false;
@@ -174,6 +243,15 @@ export default function App() {
             )}
     
             <div className={cn("relative z-10 pb-20", !featuredMovie && "pt-32")}>
+              {continueWatchingMovies.length > 0 && (
+                <MovieRow 
+                  key="continue-watching"
+                  title="Continue Watching"
+                  movies={continueWatchingMovies as any}
+                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                />
+              )}
+
               {CATEGORIES.map((category) => (
                 <MovieRow 
                   key={category.id}

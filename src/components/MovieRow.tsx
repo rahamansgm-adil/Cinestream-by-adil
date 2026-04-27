@@ -5,7 +5,7 @@ import { Movie } from '@/src/data/movies';
 
 interface MovieRowProps {
   title: string;
-  movies: Movie[];
+  movies: (Movie & { progress?: number; totalDuration?: number })[];
   onMovieClick: (movie: Movie) => void;
 }
 

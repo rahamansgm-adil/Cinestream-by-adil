@@ -4,11 +4,15 @@ import { Play, Plus, ChevronDown, ThumbsUp } from 'lucide-react';
 import { Movie } from '@/src/data/movies';
 
 interface MovieCardProps {
-  movie: Movie;
+  movie: Movie & { progress?: number; totalDuration?: number };
   onClick: (movie: Movie) => void;
 }
 
 export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
+  const progressPercent = movie.progress && movie.totalDuration 
+    ? (movie.progress / movie.totalDuration) * 100 
+    : 0;
+
   return (
     <motion.div 
       className="relative group min-w-[200px] md:min-w-[240px] h-[112px] md:h-[135px] cursor-pointer rounded overflow-hidden border border-transparent hover:border-white/50 transition-all duration-300"
@@ -25,6 +29,14 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
       />
       
       <div className="absolute inset-x-0 bottom-0 p-3 z-20">
+        {movie.progress !== undefined && movie.totalDuration !== undefined && (
+          <div className="w-full bg-white/20 h-1 rounded-full mb-3 overflow-hidden">
+            <div 
+              className="bg-netflix-red h-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
         <div className="flex items-center gap-1.5 mb-1.5">
           {movie.contentType === 'tv' && (
             <span className="text-[7px] font-black tracking-widest text-white bg-netflix-red px-1 rounded-sm uppercase">TV</span>

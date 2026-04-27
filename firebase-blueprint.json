@@ -23,6 +23,7 @@
             "properties": {
               "id": { "type": "string" },
               "number": { "type": "number" },
+              "seasonNumber": { "type": "number" },
               "title": { "type": "string" },
               "description": { "type": "string" },
               "videoUrl": { "type": "string" },
@@ -34,12 +35,31 @@
         "createdBy": { "type": "string" }
       },
       "required": ["title", "thumbnailUrl", "contentType"]
+    },
+    "UserProgress": {
+      "title": "User Watch Progress",
+      "description": "Tracking how much of a video a user has watched",
+      "type": "object",
+      "properties": {
+        "movieId": { "type": "string" },
+        "userId": { "type": "string" },
+        "progress": { "type": "number" },
+        "duration": { "type": "number" },
+        "lastWatched": { "type": "string", "format": "date-time" },
+        "episodeId": { "type": "string" },
+        "contentType": { "type": "string" }
+      },
+      "required": ["movieId", "userId", "progress", "duration", "lastWatched"]
     }
   },
   "firestore": {
     "/movies/{movieId}": {
       "schema": "Movie",
       "description": "Collection of movies"
+    },
+    "/userProgress/{progressId}": {
+      "schema": "UserProgress",
+      "description": "User watch progress"
     }
   }
 }

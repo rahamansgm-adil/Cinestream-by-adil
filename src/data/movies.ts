@@ -35,6 +35,17 @@ export interface Movie {
   subtitles?: Subtitle[];
 }
 
+export interface UserProgress {
+  id: string;
+  movieId: string;
+  userId: string;
+  progress: number; // current time in seconds
+  duration: number; // total duration in seconds
+  lastWatched: any; // timestamp
+  episodeId?: string;
+  contentType?: 'movie' | 'tv';
+}
+
 export const MOVIES: Movie[] = [];
 
 export const CATEGORIES: any[] = [];
