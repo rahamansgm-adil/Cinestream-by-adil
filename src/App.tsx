@@ -48,6 +48,7 @@ export default function App() {
   const [playingMovie, setPlayingMovie] = useState<Movie | null>(null);
   const [activeAddForm, setActiveAddForm] = useState<'movie' | 'tv' | null>(null);
   const [showUserLogin, setShowUserLogin] = useState(false);
+  const [tmdbError, setTmdbError] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { isAdmin } = useAuth();
@@ -180,8 +181,13 @@ export default function App() {
           jioHotstar: jioHotstar || [],
           primeVideo: primeVideo || []
         }));
-      } catch (err) {
+      } catch (err: any) {
         console.error("[App] Failed to fetch initial catalog:", err);
+        if (err.message?.includes('401') || err.response?.status === 401) {
+          setTmdbError("TMDB API Key unauthorized or missing. Check your environment variables.");
+        } else {
+          setTmdbError("Failed to load movie catalogs. Please refresh or check connection.");
+        }
       }
     };
     fetchInitial();
@@ -346,6 +352,20 @@ export default function App() {
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
       />
+      
+      {tmdbError && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] w-full max-w-md px-4">
+          <div className="bg-red-900/90 border border-red-500 text-white p-4 rounded-md shadow-2xl backdrop-blur-md flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm">Content Provider Error</p>
+              <p className="text-xs opacity-90">{tmdbError}</p>
+            </div>
+            <button onClick={() => setTmdbError(null)} className="p-1 hover:bg-white/10 rounded">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
       
       <main className="pb-40">
         {!searchQuery ? (

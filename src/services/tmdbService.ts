@@ -91,15 +91,27 @@ export const tmdbService = {
     return data.results.map((item: any) => this.mapToMovie(item, type));
   },
 
-  async getByProvider(providerIds: string, type: 'movie' | 'tv' = 'movie', region: string = 'IN') {
-    // Try with region first (best results for specific filters)
+  async getByProvider(providerIds: string, networkIds: string = '', type: 'movie' | 'tv' = 'movie', region: string = 'IN') {
+    // Try with region and providers first
     let data = await this.fetchFromProxy(`discover/${type}`, { 
       with_watch_providers: providerIds, 
       watch_region: region,
       sort_by: 'popularity.desc'
     });
     
-    // Fallback: Try without region if nothing found or if region-specific data is unavailable
+    // Fallback 1: Try with network IDs if provided (often more reliable for "Originals")
+    if ((!data || !data.results || data.results.length < 5) && networkIds) {
+      console.log(`[TMDB] Low results for ${providerIds} in ${region}, trying highlights from networks ${networkIds}...`);
+      const networkData = await this.fetchFromProxy(`discover/${type}`, { 
+        with_networks: networkIds,
+        sort_by: 'popularity.desc'
+      });
+      if (networkData && networkData.results && networkData.results.length > 0) {
+        data = networkData;
+      }
+    }
+    
+    // Fallback 2: Try without region if still low results
     if (!data || !data.results || data.results.length === 0) {
       console.log(`[TMDB] No results for ${providerIds} in ${region}, trying global...`);
       data = await this.fetchFromProxy(`discover/${type}`, { 
@@ -113,17 +125,35 @@ export const tmdbService = {
   },
 
   async getJioHotstarContent() {
-    // 122: Disney+ Hotstar, 220: JioCinema
-    const movies = await this.getByProvider('122|220', 'movie');
-    const tv = await this.getByProvider('122|220', 'tv');
-    return [...movies, ...tv].sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating)).slice(0, 20);
+    // 122: Disney+ Hotstar, 220: JioCinema, 337: Disney Plus
+    // Networks: 2739 (Disney+), 4474 (JioCinema)
+    const movies = await this.getByProvider('122|220|337', '2739|4474', 'movie');
+    const tv = await this.getByProvider('122|220|337', '2739|4474', 'tv');
+    
+    const combined = [...movies, ...tv];
+    return combined
+      .sort((a, b) => {
+        const r1 = a.rating === 'NR' ? 0 : parseFloat(a.rating);
+        const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
+        return r2 - r1;
+      })
+      .slice(0, 40);
   },
 
   async getAmazonPrimeContent() {
-    // 119: Amazon Prime Video
-    const movies = await this.getByProvider('119', 'movie');
-    const tv = await this.getByProvider('119', 'tv');
-    return [...movies, ...tv].sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating)).slice(0, 20);
+    // 119: Amazon Prime Video, 9: Amazon
+    // Networks: 1024 (Amazon)
+    const movies = await this.getByProvider('119|9', '1024', 'movie');
+    const tv = await this.getByProvider('119|9', '1024', 'tv');
+    
+    const combined = [...movies, ...tv];
+    return combined
+      .sort((a, b) => {
+        const r1 = a.rating === 'NR' ? 0 : parseFloat(a.rating);
+        const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
+        return r2 - r1;
+      })
+      .slice(0, 40);
   },
 
   async getTVSeasonDetails(tvId: string, seasonNumber: number) {
