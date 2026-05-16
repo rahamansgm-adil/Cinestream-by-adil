@@ -4,14 +4,26 @@ import { Movie } from '../data/movies';
 export const tmdbService = {
   async fetchFromProxy(path: string, params: Record<string, string | number> = {}) {
     try {
-      const response = await axios.get(`/api/tmdb/${path}`, { params });
+      // Check if we are on Netlify or similar
+      const isNetlify = window.location.hostname.includes('netlify.app');
+      const apiBase = isNetlify ? '/.netlify/functions/tmdb' : '/api/tmdb';
+      
+      const response = await axios.get(`${apiBase}/${path}`, { 
+        params,
+        // Add a retry mechanism or timeout
+        timeout: 15000 
+      });
       return response.data;
     } catch (error: any) {
-      if (error.response) {
-        console.error(`[TMDB Proxy Error] ${path}:`, error.response.data);
-      } else {
-        console.error(`[TMDB Proxy Error] ${path}:`, error.message);
+      const status = error.response?.status;
+      const errorMsg = error.response?.data?.message || error.message;
+      
+      console.error(`[TMDB Error] ${path}:`, errorMsg);
+      
+      if (status === 401) {
+        console.error("TMDB API Key unauthorized. Check your API key.");
       }
+      
       return null;
     }
   },
@@ -80,11 +92,22 @@ export const tmdbService = {
   },
 
   async getByProvider(providerIds: string, type: 'movie' | 'tv' = 'movie', region: string = 'IN') {
-    const data = await this.fetchFromProxy(`discover/${type}`, { 
+    // Try with region first (best results for specific filters)
+    let data = await this.fetchFromProxy(`discover/${type}`, { 
       with_watch_providers: providerIds, 
       watch_region: region,
       sort_by: 'popularity.desc'
     });
+    
+    // Fallback: Try without region if nothing found or if region-specific data is unavailable
+    if (!data || !data.results || data.results.length === 0) {
+      console.log(`[TMDB] No results for ${providerIds} in ${region}, trying global...`);
+      data = await this.fetchFromProxy(`discover/${type}`, { 
+        with_watch_providers: providerIds,
+        sort_by: 'popularity.desc'
+      });
+    }
+
     if (!data || !data.results) return [];
     return data.results.map((item: any) => this.mapToMovie(item, type));
   },

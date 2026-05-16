@@ -150,25 +150,39 @@ export default function App() {
 
   useEffect(() => {
     const fetchInitial = async () => {
-      const [trending, popular, netflix, latest, topRated, jioHotstar, primeVideo] = await Promise.all([
-        tmdbService.getTrending(),
-        tmdbService.getPopular(),
-        tmdbService.getNetflixOriginals(),
-        tmdbService.getLatestRelease(),
-        tmdbService.getTopRated(),
-        tmdbService.getJioHotstarContent(),
-        tmdbService.getAmazonPrimeContent()
-      ]);
-      setTmdbMovies(prev => ({
-        ...prev,
-        trending: trending || [],
-        popular: popular || [],
-        netflix: netflix || [],
-        latest: latest || [],
-        topRated: topRated || [],
-        jioHotstar: jioHotstar || [],
-        primeVideo: primeVideo || []
-      }));
+      console.log("[App] Starting initial catalog fetch...");
+      try {
+        const [trending, popular, netflix, latest, topRated, jioHotstar, primeVideo] = await Promise.all([
+          tmdbService.getTrending(),
+          tmdbService.getPopular(),
+          tmdbService.getNetflixOriginals(),
+          tmdbService.getLatestRelease(),
+          tmdbService.getTopRated(),
+          tmdbService.getJioHotstarContent(),
+          tmdbService.getAmazonPrimeContent()
+        ]);
+        
+        console.log("[App] Catalog fetch completed:", {
+          trending: trending?.length || 0,
+          popular: popular?.length || 0,
+          netflix: netflix?.length || 0,
+          jioHotstar: jioHotstar?.length || 0,
+          primeVideo: primeVideo?.length || 0
+        });
+
+        setTmdbMovies(prev => ({
+          ...prev,
+          trending: trending || [],
+          popular: popular || [],
+          netflix: netflix || [],
+          latest: latest || [],
+          topRated: topRated || [],
+          jioHotstar: jioHotstar || [],
+          primeVideo: primeVideo || []
+        }));
+      } catch (err) {
+        console.error("[App] Failed to fetch initial catalog:", err);
+      }
     };
     fetchInitial();
   }, []);

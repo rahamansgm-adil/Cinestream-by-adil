@@ -344,7 +344,11 @@ async function startServer() {
 
       console.log(`[TMDB] Proxying: ${path} | Type: ${isBearer ? 'Bearer' : 'V3 API Key'} | Key Length: ${effectiveKey.length}`);
 
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, { 
+        headers,
+        timeout: 10000 
+      });
+      
       res.json(response.data);
     } catch (error: any) {
       const status = error.response?.status || 500;
