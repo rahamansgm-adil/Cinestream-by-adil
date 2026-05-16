@@ -63,4 +63,15 @@ export const MOVIES: Movie[] = [
   }
 ];
 
-export const CATEGORIES: any[] = [];
+export const CATEGORIES: any[] = [
+  {
+    id: "trending",
+    title: "Trending Now",
+    movieIds: ["374720"]
+  },
+  {
+    id: "war",
+    title: "War Movies",
+    movieIds: ["374720"]
+  }
+];

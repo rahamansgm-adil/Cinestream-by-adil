@@ -252,29 +252,33 @@ export default function App() {
                 />
               )}
 
-              {CATEGORIES.map((category) => (
-                <MovieRow 
-                  key={category.id}
-                  title={category.title}
-                  movies={allMovies.filter(m => category.movieIds.includes(m.id))}
-                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
-                />
-              ))}
+              {CATEGORIES.map((category) => {
+                const categoryMovies = allMovies.filter(m => category.movieIds.includes(m.id));
+                if (categoryMovies.length === 0) return null;
+                return (
+                  <MovieRow 
+                    key={category.id}
+                    title={category.title}
+                    movies={categoryMovies}
+                    onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                  />
+                );
+              })}
 
-              {dbMovies.filter(m => m.contentType === 'tv').length > 0 && (
+              {allMovies.filter(m => m.contentType === 'tv').length > 0 && (
                 <MovieRow 
-                  key="tv-shows-community"
+                  key="tv-shows-all"
                   title="TV Shows"
-                  movies={dbMovies.filter(m => m.contentType === 'tv')}
+                  movies={allMovies.filter(m => m.contentType === 'tv')}
                   onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
                 />
               )}
 
-              {dbMovies.length > 0 && (
+              {allMovies.filter(m => m.contentType === 'movie').length > 0 && (
                 <MovieRow 
-                  key="added-by-community"
-                  title="Community Picks"
-                  movies={dbMovies}
+                  key="movies-all"
+                  title="Popular Movies"
+                  movies={allMovies.filter(m => m.contentType === 'movie' || !m.contentType)}
                   onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
                 />
               )}
