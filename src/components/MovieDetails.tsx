@@ -20,15 +20,19 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
   const [isMuted, setIsMuted] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
+  const [currentEpisodes, setCurrentEpisodes] = useState<any[]>([]);
+  const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!movie) {
       setShowTrailer(false);
+      setCurrentEpisodes([]);
       return;
     }
 
     setSelectedSeason(1);
+    setCurrentEpisodes(movie.episodes || []);
 
     // Delay showing the trailer
     const timer = setTimeout(() => {
@@ -38,10 +42,38 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
     return () => clearTimeout(timer);
   }, [movie]);
 
+  useEffect(() => {
+    const fetchSeasonEpisodes = async () => {
+      if (movie?.contentType === 'tv' && selectedSeason > 1) {
+        setIsLoadingEpisodes(true);
+        try {
+          const { tmdbService } = await import('../services/tmdbService');
+          const episodes = await tmdbService.getTVSeasonDetails(movie.id, selectedSeason);
+          setCurrentEpisodes(episodes);
+        } catch (error) {
+          console.error("Error fetching season episodes:", error);
+        } finally {
+          setIsLoadingEpisodes(false);
+        }
+      } else if (movie?.contentType === 'tv' && selectedSeason === 1) {
+        setCurrentEpisodes(movie.episodes || []);
+      }
+    };
+
+    fetchSeasonEpisodes();
+  }, [selectedSeason, movie?.id, movie?.contentType]);
+
   if (!movie) return null;
 
   const isOwner = user && movie && (movie as any).createdBy === user.uid;
   const canDelete = isAdmin || isOwner;
+
+  const seasonsList = (movie as any).seasons || [];
+  const displaySeasons = seasonsList.length > 0 
+    ? seasonsList 
+    : Array.from(new Set(movie.episodes?.map(ep => ep.seasonNumber || 1) || [1]))
+        .sort((a, b) => a - b)
+        .map(n => ({ number: n, name: `Season ${n}` }));
 
   const handleDelete = async () => {
     if (!movie || !movie.id) return;
@@ -241,69 +273,84 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
           </div>
 
           {/* Episode List for TV Shows */}
-          {movie.contentType === 'tv' && movie.episodes && movie.episodes.length > 0 && (
+          {movie.contentType === 'tv' && (
             <div className="px-8 pb-12 border-t border-zinc-800 pt-8">
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                 <h3 className="text-2xl font-bold text-white">Episodes</h3>
                 
                 {/* Season Selector */}
-                <div className="relative inline-block w-48">
-                  <select 
-                    value={selectedSeason}
-                    onChange={(e) => setSelectedSeason(Number(e.target.value))}
-                    className="w-full bg-zinc-800 text-white text-sm font-bold py-2.5 px-4 rounded border border-gray-700 outline-none focus:border-gray-500 appearance-none cursor-pointer pr-10"
-                  >
-                    {Array.from(new Set(movie.episodes.map(ep => ep.seasonNumber || 1)))
-                      .sort((a, b) => a - b)
-                      .map(season => (
-                        <option key={season} value={season}>Season {season}</option>
-                      ))
-                    }
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                    <ChevronDown size={18} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {movie.episodes
-                  .filter(ep => (ep.seasonNumber || 1) === selectedSeason)
-                  .sort((a, b) => a.number - b.number)
-                  .map((episode) => (
-                    <div 
-                      key={episode.id}
-                      className="group flex flex-col md:flex-row items-start md:items-center gap-6 p-4 rounded-lg bg-zinc-800/20 border border-transparent hover:bg-zinc-800/40 hover:border-white/10 transition-all cursor-pointer"
-                      onClick={() => onPlay({ ...movie, videoUrl: episode.videoUrl, title: `${movie.title} - S${episode.seasonNumber || 1}:E${episode.number} ${episode.title}` })}
+                {displaySeasons.length > 0 && (
+                  <div className="relative inline-block w-48">
+                    <select 
+                      value={selectedSeason}
+                      onChange={(e) => setSelectedSeason(Number(e.target.value))}
+                      className="w-full bg-zinc-800 text-white text-sm font-bold py-2.5 px-4 rounded border border-gray-700 outline-none focus:border-gray-500 appearance-none cursor-pointer pr-10"
                     >
-                      <div className="text-2xl font-black text-gray-600 group-hover:text-white transition-colors w-8 text-center shrink-0">
-                        {episode.number}
-                      </div>
-                      <div className="relative w-full md:w-40 aspect-video rounded-md overflow-hidden bg-zinc-800 flex-shrink-0">
-                         <img src={episode.thumbnailUrl || movie.thumbnailUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Play size={32} fill="white" className="text-white" />
-                         </div>
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-white group-hover:text-netflix-red transition-colors">{episode.title}</h4>
-                          <span className="text-sm text-gray-500 font-medium">{episode.duration}</span>
-                        </div>
-                        <p className="text-sm text-gray-400 line-clamp-2 md:line-clamp-3 leading-relaxed">
-                          {episode.description || `Chapter ${episode.number} of Season ${episode.seasonNumber || 1}.`}
-                        </p>
-                      </div>
+                      {displaySeasons.map((season: any) => (
+                        <option key={season.number} value={season.number}>
+                          {season.name || `Season ${season.number}`}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                      <ChevronDown size={18} />
                     </div>
-                  ))
-                }
-                
-                {movie.episodes.filter(ep => (ep.seasonNumber || 1) === selectedSeason).length === 0 && (
-                  <div className="text-center py-12 text-gray-500 font-bold italic">
-                    No episodes found for Season {selectedSeason}
                   </div>
                 )}
               </div>
+
+              {isLoadingEpisodes ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="animate-spin text-white" size={40} />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {currentEpisodes
+                    .sort((a, b) => a.number - b.number)
+                    .map((episode) => (
+                      <div 
+                        key={episode.id}
+                        className="group flex flex-col md:flex-row items-start md:items-center gap-6 p-4 rounded-lg bg-zinc-800/20 border border-transparent hover:bg-zinc-800/40 hover:border-white/10 transition-all cursor-pointer"
+                        onClick={() => onPlay({ 
+                          ...movie, 
+                          videoUrl: episode.videoUrl, 
+                          title: `${movie.title} - S${episode.seasonNumber || 1}:E${episode.number} ${episode.title}` 
+                        })}
+                      >
+                        <div className="text-2xl font-black text-gray-600 group-hover:text-white transition-colors w-8 text-center shrink-0">
+                          {episode.number}
+                        </div>
+                        <div className="relative w-full md:w-40 aspect-video rounded-md overflow-hidden bg-zinc-800 flex-shrink-0">
+                           <img 
+                             src={episode.thumbnailUrl || movie.thumbnailUrl} 
+                             className="w-full h-full object-cover" 
+                             referrerPolicy="no-referrer" 
+                             alt={episode.title}
+                           />
+                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Play size={32} fill="white" className="text-white" />
+                           </div>
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-white group-hover:text-white/80 transition-colors">{episode.title}</h4>
+                            <span className="text-sm text-gray-500 font-medium">{episode.duration}</span>
+                          </div>
+                          <p className="text-sm text-gray-400 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                            {episode.description || `Chapter ${episode.number} of Season ${episode.seasonNumber || 1}.`}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  }
+                  
+                  {currentEpisodes.length === 0 && (
+                    <div className="text-center py-12 text-gray-500 font-bold italic">
+                      No episodes found for Season {selectedSeason}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </motion.div>

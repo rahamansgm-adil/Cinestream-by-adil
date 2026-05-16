@@ -13,12 +13,12 @@ import MovieRow from './components/MovieRow';
 import MovieDetails from './components/MovieDetails';
 import VideoPlayer from './components/VideoPlayer';
 import AddMovieForm from './components/AddMovieForm';
-import { IPTVView } from './components/IPTVView';
 import { UserLoginModal } from './components/UserLoginModal';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 import { MOVIES as initialMovies, CATEGORIES, Movie } from './data/movies';
-import { db, auth, signInWithGoogle } from './lib/firebase';
+import { tmdbService } from './services/tmdbService';
+import { db, auth, signInWithGoogle, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, query, orderBy, onSnapshot, getDocs, writeBatch, doc, setDoc, serverTimestamp, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { UserProgress } from './data/movies';
@@ -26,7 +26,17 @@ import { UserProgress } from './data/movies';
 export default function App() {
   const [movies, setMovies] = useState<Movie[]>(initialMovies);
   const [dbMovies, setDbMovies] = useState<Movie[]>([]);
-  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie' | 'live'>('all');
+  const [tmdbMovies, setTmdbMovies] = useState<Record<string, Movie[]>>({
+    trending: [],
+    popular: [],
+    netflix: [],
+    topRated: [],
+    latest: [],
+    jioHotstar: [],
+    primeVideo: [],
+    searchResults: []
+  });
+  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie'>('all');
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const progressRef = useRef<UserProgress[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -44,7 +54,17 @@ export default function App() {
 
   // Combined and filtered movies
   const allMovies = useMemo(() => {
-    const combined = [...dbMovies, ...movies];
+    const combined = [
+      ...dbMovies, 
+      ...movies, 
+      ...tmdbMovies.trending, 
+      ...tmdbMovies.popular, 
+      ...tmdbMovies.netflix,
+      ...tmdbMovies.topRated,
+      ...tmdbMovies.latest,
+      ...tmdbMovies.jioHotstar,
+      ...tmdbMovies.primeVideo
+    ];
     const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
     
     let filtered = unique;
@@ -56,6 +76,11 @@ export default function App() {
     }
 
     if (!searchQuery.trim()) return filtered;
+    
+    // If we have search results from TMDB, prioritize them
+    if (tmdbMovies.searchResults.length > 0) {
+      return tmdbMovies.searchResults;
+    }
     
     const query = searchQuery.toLowerCase().trim();
     return filtered.filter(m => {
@@ -94,6 +119,8 @@ export default function App() {
         ...doc.data()
       })) as Movie[];
       setDbMovies(fetchedMovies);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'movies');
     });
 
     let unsubscribeProgress = () => {};
@@ -107,6 +134,8 @@ export default function App() {
         const fetchedProgress = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() } as UserProgress));
         setUserProgress(fetchedProgress);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'userProgress');
       });
     } else {
       setUserProgress([]);
@@ -118,6 +147,46 @@ export default function App() {
       unsubscribeProgress();
     };
   }, [user]);
+
+  useEffect(() => {
+    const fetchInitial = async () => {
+      const [trending, popular, netflix, latest, topRated, jioHotstar, primeVideo] = await Promise.all([
+        tmdbService.getTrending(),
+        tmdbService.getPopular(),
+        tmdbService.getNetflixOriginals(),
+        tmdbService.getLatestRelease(),
+        tmdbService.getTopRated(),
+        tmdbService.getJioHotstarContent(),
+        tmdbService.getAmazonPrimeContent()
+      ]);
+      setTmdbMovies(prev => ({
+        ...prev,
+        trending: trending || [],
+        popular: popular || [],
+        netflix: netflix || [],
+        latest: latest || [],
+        topRated: topRated || [],
+        jioHotstar: jioHotstar || [],
+        primeVideo: primeVideo || []
+      }));
+    };
+    fetchInitial();
+  }, []);
+
+  // Search effect
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setTmdbMovies(prev => ({ ...prev, searchResults: [] }));
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const results = await tmdbService.search(searchQuery);
+      setTmdbMovies(prev => ({ ...prev, searchResults: results || [] }));
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const continueWatchingMovies = useMemo(() => {
     if (!user || userProgress.length === 0) return [];
@@ -137,25 +206,16 @@ export default function App() {
 
   const featuredMovie = allMovies[0];
 
+  const filterMovies = useCallback((list: Movie[]) => {
+    if (activeCategory === 'all') return list;
+    return list.filter(m => {
+      if (activeCategory === 'tv') return m.contentType === 'tv';
+      return m.contentType === 'movie' || !m.contentType;
+    });
+  }, [activeCategory]);
+
   const handlePlay = (movie: Movie) => {
     setPlayingMovie(movie);
-  };
-
-  const handleLivePlay = (streamUrl: string, title: string, logo: string) => {
-    setPlayingMovie({
-      id: 'live-' + Date.now(),
-      title: title,
-      videoUrl: streamUrl,
-      thumbnailUrl: logo,
-      bannerUrl: logo,
-      description: 'Live Stream',
-      duration: 'LIVE',
-      year: new Date().getFullYear().toString(),
-      rating: 'LIVE',
-      genres: ['Live'],
-      cast: [],
-      contentType: 'movie'
-    } as Movie);
   };
 
   const handleAddMovie = (newMovie: Movie) => {
@@ -166,6 +226,18 @@ export default function App() {
   const handleClosePlayer = useCallback(() => {
     setPlayingMovie(null);
   }, []);
+
+  const handleMovieSelect = async (movie: Movie) => {
+    // If it's a TMDB movie (has a numeric ID and not already in dbMovies)
+    if (!dbMovies.find(m => m.id === movie.id) && !movies.find(m => m.id === movie.id)) {
+      const details = await tmdbService.getMovieDetails(movie.id, movie.contentType);
+      if (details) {
+        setSelectedMovie(details);
+        return;
+      }
+    }
+    setSelectedMovie(movie);
+  };
 
   const handlePlayerReady = useCallback((player: any) => {
     if (playingMovie && user) {
@@ -216,17 +288,6 @@ export default function App() {
     let src = playingMovie.videoUrl;
     let type = 'video/mp4'; // Default
     
-    // Improved HLS detection for IPTV
-    const isHLS = url.includes('.m3u8') || url.includes('/m3u8') || playingMovie.rating === 'LIVE';
-    if (isHLS) {
-      type = 'application/x-mpegURL';
-      
-      // Proxy IPTV streams to avoid CORS/Mixed Content errors (unless it's a known embed or drive)
-      if (!url.includes('drive.google.com')) {
-        src = `/api/iptv/stream?url=${encodeURIComponent(playingMovie.videoUrl)}`;
-      }
-    }
-
     const isDrive = url.includes('drive.google.com');
     if (isDrive) {
       const driveId = url.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/)?.[1];
@@ -273,15 +334,13 @@ export default function App() {
       />
       
       <main className="pb-40">
-        {activeCategory === 'live' ? (
-          <IPTVView onPlay={handleLivePlay} searchQuery={searchQuery} />
-        ) : !searchQuery ? (
+        {!searchQuery ? (
           <>
             {featuredMovie && (
               <Hero 
                 movie={featuredMovie} 
                 onPlay={handlePlay} 
-                onMoreInfo={setSelectedMovie} 
+                onMoreInfo={handleMovieSelect} 
               />
             )}
     
@@ -291,19 +350,82 @@ export default function App() {
                   key="continue-watching"
                   title="Continue Watching"
                   movies={continueWatchingMovies as any}
-                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                  onMovieClick={handleMovieSelect}
+                />
+              )}
+ 
+              {filterMovies(tmdbMovies.netflix).length > 0 && (
+                <MovieRow 
+                  key="netflix-originals"
+                  title="Netflix Originals"
+                  movies={filterMovies(tmdbMovies.netflix)}
+                  onMovieClick={handleMovieSelect}
+                />
+              )}
+ 
+              {filterMovies(tmdbMovies.jioHotstar).length > 0 && (
+                <MovieRow 
+                  key="jio-hotstar"
+                  title="JioCinema & Hotstar"
+                  movies={filterMovies(tmdbMovies.jioHotstar)}
+                  onMovieClick={handleMovieSelect}
+                />
+              )}
+ 
+              {filterMovies(tmdbMovies.primeVideo).length > 0 && (
+                <MovieRow 
+                  key="prime-video"
+                  title="Amazon Prime Video"
+                  movies={filterMovies(tmdbMovies.primeVideo)}
+                  onMovieClick={handleMovieSelect}
+                />
+              )}
+ 
+              {filterMovies(tmdbMovies.trending).length > 0 && (
+                <MovieRow 
+                  key="trending-now"
+                  title="Trending Now"
+                  movies={filterMovies(tmdbMovies.trending)}
+                  onMovieClick={handleMovieSelect}
+                />
+              )}
+ 
+              {filterMovies(tmdbMovies.popular).length > 0 && (
+                <MovieRow 
+                  key="popular-on-cinestream"
+                  title="Popular on CineStream"
+                  movies={filterMovies(tmdbMovies.popular)}
+                  onMovieClick={handleMovieSelect}
+                />
+              )}
+ 
+              {filterMovies(tmdbMovies.latest).length > 0 && (
+                <MovieRow 
+                  key="latest-releases"
+                  title="Latest Releases"
+                  movies={filterMovies(tmdbMovies.latest)}
+                  onMovieClick={handleMovieSelect}
+                />
+              )}
+ 
+              {filterMovies(tmdbMovies.topRated).length > 0 && (
+                <MovieRow 
+                  key="top-rated-movies"
+                  title="Top Rated Movies"
+                  movies={filterMovies(tmdbMovies.topRated)}
+                  onMovieClick={handleMovieSelect}
                 />
               )}
 
               {CATEGORIES.map((category) => {
-                const categoryMovies = allMovies.filter(m => category.movieIds.includes(m.id));
+                const categoryMovies = filterMovies(allMovies.filter(m => category.movieIds.includes(m.id)));
                 if (categoryMovies.length === 0) return null;
                 return (
                   <MovieRow 
                     key={category.id}
                     title={category.title}
                     movies={categoryMovies}
-                    onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                    onMovieClick={handleMovieSelect}
                   />
                 );
               })}
@@ -313,7 +435,7 @@ export default function App() {
                   key="all-content-row"
                   title="All Content"
                   movies={allMovies}
-                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                  onMovieClick={handleMovieSelect}
                 />
               )}
 
@@ -322,7 +444,7 @@ export default function App() {
                   key="tv-shows-all"
                   title="TV Shows"
                   movies={allMovies.filter(m => m.contentType === 'tv')}
-                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                  onMovieClick={handleMovieSelect}
                 />
               )}
 
@@ -331,7 +453,7 @@ export default function App() {
                   key="movies-all"
                   title="Popular Movies"
                   movies={allMovies.filter(m => m.contentType === 'movie' || !m.contentType)}
-                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                  onMovieClick={handleMovieSelect}
                 />
               )}
     
@@ -340,7 +462,7 @@ export default function App() {
                   key="recently-added-row"
                   title="Recently Added"
                   movies={allMovies.slice(0, allMovies.length - initialMovies.length)}
-                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                  onMovieClick={handleMovieSelect}
                 />
               )}
             </div>
@@ -351,7 +473,7 @@ export default function App() {
             {allMovies.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-10 gap-x-4">
                 {allMovies.map(movie => (
-                  <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="cursor-pointer">
+                  <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="cursor-pointer">
                     <img 
                       src={movie.thumbnailUrl} 
                       alt={movie.title} 

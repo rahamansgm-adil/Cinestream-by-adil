@@ -269,60 +269,6 @@ async function startServer() {
     }
   });
 
-  // API Route for IPTV Stream Proxy (Bypasses CORS/Mixed Content)
-  app.get("/api/iptv/stream", async (req, res) => {
-    const url = req.query.url as string;
-    if (!url) return res.status(400).send("URL is required");
-
-    try {
-      console.log(`[IPTV] Proxying stream: ${url}`);
-      const streamResponse = await axios({
-        method: 'get',
-        url: url,
-        responseType: 'stream',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': url.split('/').slice(0, 3).join('/')
-        },
-        timeout: 20000
-      });
-
-      // Pass through headers
-      res.setHeader('Content-Type', streamResponse.headers['content-type'] || 'application/x-mpegURL');
-      if (streamResponse.headers['content-length']) res.setHeader('Content-Length', streamResponse.headers['content-length']);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-
-      req.on('close', () => {
-        if (streamResponse.data && !streamResponse.data.destroyed) {
-          streamResponse.data.destroy();
-        }
-      });
-
-      streamResponse.data.pipe(res);
-    } catch (error: any) {
-      console.error(`[IPTV] Proxy error for ${url}:`, error.message);
-      res.status(500).send("Stream proxy failed");
-    }
-  });
-
-  // API Route for Xtream Codes API Proxy
-  app.get("/api/iptv/xtream", async (req, res) => {
-    const { host, username, password, action, category_id } = req.query;
-    if (!host || !username || !password) return res.status(400).send("Missing credentials");
-
-    const apiUrl = `${host}/player_api.php?username=${username}&password=${password}${action ? `&action=${action}` : ''}${category_id ? `&category_id=${category_id}` : ''}`;
-
-    try {
-      console.log(`[Xtream] Requesting: ${apiUrl}`);
-      const response = await axios.get(apiUrl, { timeout: 15000 });
-      res.json(response.data);
-    } catch (error: any) {
-      console.error(`[Xtream] API error:`, error.message);
-      res.status(500).json({ error: "Failed to connect to Xtream provider" });
-    }
-  });
-
   // Admin Verification Route
   app.get("/api/admin/verify", async (req, res) => {
     const authHeader = req.headers.authorization;
@@ -345,6 +291,67 @@ async function startServer() {
     } catch (err: any) {
       console.error(`[Admin] Verify failed:`, err.message);
       res.json({ isAdmin: false });
+    }
+  });
+
+  // API Route for TMDB Proxy
+  app.get("/api/tmdb/*", async (req, res) => {
+    const tmdbKey = process.env.TMDB_API_KEY;
+    const viteTmdbKey = process.env.VITE_TMDB_API_KEY;
+    
+    // Trim and sanitize key
+    let effectiveKey = (tmdbKey || viteTmdbKey || "").trim();
+    
+    if (!effectiveKey) {
+      console.warn("[TMDB] Attempted fetch without API key");
+      return res.status(401).json({ 
+        error: "TMDB API Key missing", 
+        message: "Please set TMDB_API_KEY in the environment variables (Settings > Secrets)." 
+      });
+    }
+
+    const path = req.params[0];
+    if (!path) {
+      return res.status(400).json({ error: "Missing TMDB path" });
+    }
+
+    const query = req.query;
+    
+    try {
+      // TMDB v3 keys are exactly 32 hex chars. v4 tokens are much longer.
+      const isBearer = effectiveKey.length > 40 || effectiveKey.startsWith('ey');
+      const headers: any = {
+        'Accept': 'application/json',
+        'User-Agent': 'CineStream-App'
+      };
+
+      let url = `https://api.themoviedb.org/3/${path}`;
+      
+      if (isBearer) {
+        // Use v4 Bearer Token auth
+        const token = effectiveKey.replace(/^Bearer\s+/i, '');
+        headers['Authorization'] = `Bearer ${token}`;
+        const queryString = new URLSearchParams(query as any).toString();
+        if (queryString) url += `?${queryString}`;
+      } else {
+        // Use v3 api_key query param
+        const queryString = new URLSearchParams({
+          ...query as any,
+          api_key: effectiveKey
+        }).toString();
+        url += `?${queryString}`;
+      }
+
+      console.log(`[TMDB] Proxying: ${path} | Type: ${isBearer ? 'Bearer' : 'V3 API Key'} | Key Length: ${effectiveKey.length}`);
+
+      const response = await axios.get(url, { headers });
+      res.json(response.data);
+    } catch (error: any) {
+      const status = error.response?.status || 500;
+      const data = error.response?.data || { error: "Failed to fetch from TMDB", details: error.message };
+      
+      console.error(`[TMDB] Error fetching ${path} (Status ${status}):`, data);
+      res.status(status).json(data);
     }
   });
 

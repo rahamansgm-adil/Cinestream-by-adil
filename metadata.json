@@ -2,5 +2,5 @@
   "name": "CineStream By Adil",
   "description": "A high-performance, Netflix-inspired movie streaming application with a cinematic dark theme and custom HLS video player.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
