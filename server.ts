@@ -269,6 +269,60 @@ async function startServer() {
     }
   });
 
+  // API Route for IPTV Stream Proxy (Bypasses CORS/Mixed Content)
+  app.get("/api/iptv/stream", async (req, res) => {
+    const url = req.query.url as string;
+    if (!url) return res.status(400).send("URL is required");
+
+    try {
+      console.log(`[IPTV] Proxying stream: ${url}`);
+      const streamResponse = await axios({
+        method: 'get',
+        url: url,
+        responseType: 'stream',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': url.split('/').slice(0, 3).join('/')
+        },
+        timeout: 20000
+      });
+
+      // Pass through headers
+      res.setHeader('Content-Type', streamResponse.headers['content-type'] || 'application/x-mpegURL');
+      if (streamResponse.headers['content-length']) res.setHeader('Content-Length', streamResponse.headers['content-length']);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+
+      req.on('close', () => {
+        if (streamResponse.data && !streamResponse.data.destroyed) {
+          streamResponse.data.destroy();
+        }
+      });
+
+      streamResponse.data.pipe(res);
+    } catch (error: any) {
+      console.error(`[IPTV] Proxy error for ${url}:`, error.message);
+      res.status(500).send("Stream proxy failed");
+    }
+  });
+
+  // API Route for Xtream Codes API Proxy
+  app.get("/api/iptv/xtream", async (req, res) => {
+    const { host, username, password, action, category_id } = req.query;
+    if (!host || !username || !password) return res.status(400).send("Missing credentials");
+
+    const apiUrl = `${host}/player_api.php?username=${username}&password=${password}${action ? `&action=${action}` : ''}${category_id ? `&category_id=${category_id}` : ''}`;
+
+    try {
+      console.log(`[Xtream] Requesting: ${apiUrl}`);
+      const response = await axios.get(apiUrl, { timeout: 15000 });
+      res.json(response.data);
+    } catch (error: any) {
+      console.error(`[Xtream] API error:`, error.message);
+      res.status(500).json({ error: "Failed to connect to Xtream provider" });
+    }
+  });
+
   // Admin Verification Route
   app.get("/api/admin/verify", async (req, res) => {
     const authHeader = req.headers.authorization;

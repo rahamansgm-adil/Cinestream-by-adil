@@ -220,6 +220,11 @@ export default function App() {
     const isHLS = url.includes('.m3u8') || url.includes('/m3u8') || playingMovie.rating === 'LIVE';
     if (isHLS) {
       type = 'application/x-mpegURL';
+      
+      // Proxy IPTV streams to avoid CORS/Mixed Content errors (unless it's a known embed or drive)
+      if (!url.includes('drive.google.com')) {
+        src = `/api/iptv/stream?url=${encodeURIComponent(playingMovie.videoUrl)}`;
+      }
     }
 
     const isDrive = url.includes('drive.google.com');
