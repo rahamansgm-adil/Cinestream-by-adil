@@ -122,8 +122,24 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
     }
   };
 
+  const extractTmdbIdFromUrl = (url: string) => {
+    const movieMatch = url.match(/themoviedb\.org\/movie\/(\d+)/);
+    const tvMatch = url.match(/themoviedb\.org\/tv\/(\d+)/);
+    if (movieMatch) return { id: parseInt(movieMatch[1]), type: 'movie' };
+    if (tvMatch) return { id: parseInt(tvMatch[1]), type: 'tv' };
+    return null;
+  };
+
   const handleTmdbSearch = async () => {
     if (!tmdbSearch.trim() || !tmdbApiKey) return;
+
+    // Check if input is a URL
+    const urlData = extractTmdbIdFromUrl(tmdbSearch);
+    if (urlData) {
+      selectTmdbItem({ id: urlData.id, media_type: urlData.type });
+      return;
+    }
+
     setIsSearchingTmdb(true);
     try {
       const response = await axios.get(`https://api.themoviedb.org/3/search/multi`, {
@@ -177,6 +193,7 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
         description: data.overview,
         thumbnailUrl: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : '',
         bannerUrl: data.backdrop_path ? `https://image.tmdb.org/t/p/original${data.backdrop_path}` : '',
+        videoUrl: mediaType === 'movie' ? `https://www.vidking.net/embed/movie/${data.id}` : '',
         year: (data.release_date || data.first_air_date || '').split('-')[0] || '2024',
         rating,
         duration: mediaType === 'movie' ? `${Math.floor(data.runtime / 60)}h ${data.runtime % 60}m` : `${data.number_of_seasons} Seasons`,
@@ -826,7 +843,7 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                   <input 
                     type="text"
-                    placeholder="Search movie or TV show title..."
+                    placeholder="Search title or paste TMDB link (e.g., themoviedb.org/tv/91363)..."
                     className="w-full bg-black/40 border border-zinc-700/50 pl-10 pr-4 py-2 text-white outline-none focus:border-netflix-red rounded-lg transition-all"
                     value={tmdbSearch}
                     onChange={e => setTmdbSearch(e.target.value)}

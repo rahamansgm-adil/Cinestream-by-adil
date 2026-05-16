@@ -46,6 +46,21 @@ export interface UserProgress {
   contentType?: 'movie' | 'tv';
 }
 
-export const MOVIES: Movie[] = [];
+export const MOVIES: Movie[] = [
+  {
+    id: "374720",
+    title: "Dunkirk",
+    description: "The story of the miraculous evacuation of Allied soldiers from Belgium, Britain, Canada, and France, who were cut off and surrounded by the German army from the beaches and harbor of Dunkirk, France, during the Battle of France in World War II.",
+    thumbnailUrl: "https://image.tmdb.org/t/p/w500/ebSnODmB92NcnzUtnvIbsrTMZv9.jpg",
+    bannerUrl: "https://image.tmdb.org/t/p/original/6v7S7zD9eXpD8bNOfP2R3HkFvMv.jpg",
+    videoUrl: "https://www.vidking.net/embed/movie/374720",
+    duration: "106m",
+    year: "2017",
+    rating: "8.1",
+    genres: ["War", "Action", "Drama"],
+    cast: ["Fionn Whitehead", "Tom Glynn-Carney", "Jack Lowden", "Harry Styles", "Aneurin Barnard"],
+    contentType: 'movie'
+  }
+];
 
 export const CATEGORIES: any[] = [];
