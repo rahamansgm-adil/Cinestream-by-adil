@@ -25,6 +25,7 @@ import { UserProgress } from './data/movies';
 export default function App() {
   const [movies, setMovies] = useState<Movie[]>(initialMovies);
   const [dbMovies, setDbMovies] = useState<Movie[]>([]);
+  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie'>('all');
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const progressRef = useRef<UserProgress[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -45,10 +46,18 @@ export default function App() {
     const combined = [...dbMovies, ...movies];
     const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
     
-    if (!searchQuery.trim()) return unique;
+    let filtered = unique;
+    if (activeCategory !== 'all') {
+      filtered = unique.filter(m => {
+        if (activeCategory === 'tv') return m.contentType === 'tv';
+        return m.contentType === 'movie' || !m.contentType;
+      });
+    }
+
+    if (!searchQuery.trim()) return filtered;
     
     const query = searchQuery.toLowerCase().trim();
-    return unique.filter(m => {
+    return filtered.filter(m => {
       try {
         const titleMatch = m.title?.toLowerCase().includes(query) || false;
         const descMatch = m.description?.toLowerCase().includes(query) || false;
@@ -224,6 +233,8 @@ export default function App() {
       <Navbar 
         onAddMovieClick={() => setActiveAddForm('movie')} 
         onAddTVShowClick={() => setActiveAddForm('tv')}
+        onCategoryChange={setActiveCategory}
+        activeCategory={activeCategory}
         user={user}
         onLogin={() => setShowUserLogin(true)}
         onLogout={() => signOut(auth)}
@@ -264,6 +275,15 @@ export default function App() {
                   />
                 );
               })}
+
+              {allMovies.length > 0 && (
+                <MovieRow 
+                  key="all-content-row"
+                  title="All Content"
+                  movies={allMovies}
+                  onMovieClick={(movie: Movie) => setSelectedMovie(movie)}
+                />
+              )}
 
               {allMovies.filter(m => m.contentType === 'tv').length > 0 && (
                 <MovieRow 

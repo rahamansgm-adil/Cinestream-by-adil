@@ -48,20 +48,6 @@ export interface UserProgress {
 
 export const MOVIES: Movie[] = [
   {
-    id: "374720",
-    title: "Dunkirk",
-    description: "The story of the miraculous evacuation of Allied soldiers from Belgium, Britain, Canada, and France, who were cut off and surrounded by the German army from the beaches and harbor of Dunkirk, France, during the Battle of France in World War II.",
-    thumbnailUrl: "https://image.tmdb.org/t/p/w500/ebSnODmB92NcnzUtnvIbsrTMZv9.jpg",
-    bannerUrl: "https://image.tmdb.org/t/p/original/6v7S7zD9eXpD8bNOfP2R3HkFvMv.jpg",
-    videoUrl: "https://www.vidking.net/embed/movie/374720",
-    duration: "106m",
-    year: "2017",
-    rating: "8.1",
-    genres: ["War", "Action", "Drama"],
-    cast: ["Fionn Whitehead", "Tom Glynn-Carney", "Jack Lowden", "Harry Styles", "Aneurin Barnard"],
-    contentType: 'movie'
-  },
-  {
     id: "273240",
     title: "Off Campus",
     description: "Hannah Wells tutors hockey captain Garrett Graham to win over her crush. Their deal becomes real connection as they face their pasts. Friends Logan, Dean, Tucker, and Allie navigate college life and love.",
@@ -84,6 +70,20 @@ export const MOVIES: Movie[] = [
       { id: "e7", title: "The Faceoff", description: "Hannah confronts her past while Garrett faces the most challenging game of his season and Allie meets her hero.", duration: "54m", number: 7, seasonNumber: 1, videoUrl: "https://www.vidking.net/embed/tv/273240/1/7" },
       { id: "e8", title: "The Line Change", description: "As the semester ends, fallout from the St. Anthony's game rattles the Hawks, and Hannah strives to find her voice.", duration: "56m", number: 8, seasonNumber: 1, videoUrl: "https://www.vidking.net/embed/tv/273240/1/8" }
     ]
+  },
+  {
+    id: "374720",
+    title: "Dunkirk",
+    description: "The story of the miraculous evacuation of Allied soldiers from Belgium, Britain, Canada, and France, who were cut off and surrounded by the German army from the beaches and harbor of Dunkirk, France, during the Battle of France in World War II.",
+    thumbnailUrl: "https://image.tmdb.org/t/p/w500/ebSnODmB92NcnzUtnvIbsrTMZv9.jpg",
+    bannerUrl: "https://image.tmdb.org/t/p/original/6v7S7zD9eXpD8bNOfP2R3HkFvMv.jpg",
+    videoUrl: "https://www.vidking.net/embed/movie/374720",
+    duration: "106m",
+    year: "2017",
+    rating: "8.1",
+    genres: ["War", "Action", "Drama"],
+    cast: ["Fionn Whitehead", "Tom Glynn-Carney", "Jack Lowden", "Harry Styles", "Aneurin Barnard"],
+    contentType: 'movie'
   }
 ];
 
@@ -91,7 +91,12 @@ export const CATEGORIES: any[] = [
   {
     id: "trending",
     title: "Trending Now",
-    movieIds: ["374720", "273240"]
+    movieIds: ["273240", "374720"]
+  },
+  {
+    id: "tv-shows",
+    title: "TV Shows You'll Love",
+    movieIds: ["273240"]
   },
   {
     id: "drama",

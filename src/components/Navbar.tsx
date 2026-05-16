@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext';
 interface NavbarProps {
   onAddMovieClick: () => void;
   onAddTVShowClick: () => void;
+  onCategoryChange: (category: 'all' | 'tv' | 'movie') => void;
+  activeCategory: 'all' | 'tv' | 'movie';
   user: FirebaseUser | null;
   onLogin: () => void;
   onLogout: () => void;
@@ -17,6 +19,8 @@ interface NavbarProps {
 export const Navbar = ({ 
   onAddMovieClick, 
   onAddTVShowClick, 
+  onCategoryChange,
+  activeCategory,
   user, 
   onLogin, 
   onLogout, 
@@ -47,14 +51,32 @@ export const Navbar = ({
       isScrolled ? "bg-black shadow-2xl" : "bg-gradient-to-b from-black/80 to-transparent"
     )}>
       <div className="flex items-center gap-10">
-        <div className="text-netflix-red text-2xl font-black tracking-tighter cursor-pointer whitespace-nowrap">
+        <div 
+          onClick={() => onCategoryChange('all')}
+          className="text-netflix-red text-2xl font-black tracking-tighter cursor-pointer whitespace-nowrap hover:scale-105 transition-transform"
+        >
           CINESTREAM BY ADIL
         </div>
         
         <ul className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-200">
-          <li className="text-white cursor-pointer transition-colors">Home</li>
-          <li className="hover:text-gray-400 cursor-pointer transition-colors">TV Shows</li>
-          <li className="hover:text-gray-400 cursor-pointer transition-colors">Movies</li>
+          <li 
+            onClick={() => onCategoryChange('all')}
+            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'all' ? "text-white font-bold" : "text-gray-400")}
+          >
+            Home
+          </li>
+          <li 
+            onClick={() => onCategoryChange('tv')}
+            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'tv' ? "text-white font-bold" : "text-gray-400")}
+          >
+            TV Shows
+          </li>
+          <li 
+            onClick={() => onCategoryChange('movie')}
+            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'movie' ? "text-white font-bold" : "text-gray-400")}
+          >
+            Movies
+          </li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">New & Popular</li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">My List</li>
           
