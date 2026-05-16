@@ -216,8 +216,9 @@ export default function App() {
     let src = playingMovie.videoUrl;
     let type = 'video/mp4'; // Default
     
-    const isM3U8 = url.includes('.m3u8');
-    if (isM3U8) {
+    // Improved HLS detection for IPTV
+    const isHLS = url.includes('.m3u8') || url.includes('/m3u8') || playingMovie.rating === 'LIVE';
+    if (isHLS) {
       type = 'application/x-mpegURL';
     }
 
@@ -243,6 +244,7 @@ export default function App() {
       controls: true,
       responsive: true,
       fluid: true,
+      liveui: playingMovie.rating === 'LIVE',
       sources: [{
         src: src,
         type: type

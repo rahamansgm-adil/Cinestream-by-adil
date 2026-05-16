@@ -168,7 +168,12 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
         player.on('error', () => {
           const vjsError = player.error();
           console.error('Video.js Error:', vjsError);
-          setError("The video could not be loaded. This might be due to restricted permissions on Google Drive or an incompatible file format.");
+          
+          if (options.sources?.[0]?.src?.includes('.m3u8')) {
+            setError("The live stream could not be loaded. This is often caused by CORS restrictions from the broadcaster or Mixed Content blocking (trying to load HTTP on an HTTPS site). Many IPTV streams do not support browser playback.");
+          } else {
+            setError("The video could not be loaded. This might be due to restricted permissions on Google Drive or an incompatible file format.");
+          }
         });
 
         onReady && onReady(player);
