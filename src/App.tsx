@@ -13,6 +13,7 @@ import MovieRow from './components/MovieRow';
 import MovieDetails from './components/MovieDetails';
 import VideoPlayer from './components/VideoPlayer';
 import AddMovieForm from './components/AddMovieForm';
+import { IPTVView } from './components/IPTVView';
 import { UserLoginModal } from './components/UserLoginModal';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
@@ -25,7 +26,7 @@ import { UserProgress } from './data/movies';
 export default function App() {
   const [movies, setMovies] = useState<Movie[]>(initialMovies);
   const [dbMovies, setDbMovies] = useState<Movie[]>([]);
-  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie'>('all');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie' | 'live'>('all');
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const progressRef = useRef<UserProgress[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -140,6 +141,23 @@ export default function App() {
     setPlayingMovie(movie);
   };
 
+  const handleLivePlay = (streamUrl: string, title: string, logo: string) => {
+    setPlayingMovie({
+      id: 'live-' + Date.now(),
+      title: title,
+      videoUrl: streamUrl,
+      thumbnailUrl: logo,
+      bannerUrl: logo,
+      description: 'Live Stream',
+      duration: 'LIVE',
+      year: new Date().getFullYear().toString(),
+      rating: 'LIVE',
+      genres: ['Live'],
+      cast: [],
+      contentType: 'movie'
+    } as Movie);
+  };
+
   const handleAddMovie = (newMovie: Movie) => {
     // This is now handled by the observer, but we can keep it for immediate feedback if needed
     // or just let the observer update dbMovies
@@ -198,6 +216,11 @@ export default function App() {
     let src = playingMovie.videoUrl;
     let type = 'video/mp4'; // Default
     
+    const isM3U8 = url.includes('.m3u8');
+    if (isM3U8) {
+      type = 'application/x-mpegURL';
+    }
+
     const isDrive = url.includes('drive.google.com');
     if (isDrive) {
       const driveId = url.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/)?.[1];
@@ -243,7 +266,9 @@ export default function App() {
       />
       
       <main className="pb-40">
-        {!searchQuery ? (
+        {activeCategory === 'live' ? (
+          <IPTVView onPlay={handleLivePlay} searchQuery={searchQuery} />
+        ) : !searchQuery ? (
           <>
             {featuredMovie && (
               <Hero 
