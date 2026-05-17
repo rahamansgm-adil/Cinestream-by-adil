@@ -89,14 +89,33 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Test connection strictly as per guidelines
 async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error) {
-      if (error.message.includes('the client is offline') || error.message.includes('unavailable')) {
-        console.error("Firebase connection error: The backend is unavailable or the client is offline. Please ensure the Firestore database is provisioned and your Firebase project is healthy.");
+  const MAX_RETRIES = 2;
+  let attempt = 0;
+  
+  const tryConnect = async () => {
+    try {
+      // Use a slightly longer timeout for the initial connection check
+      await getDocFromServer(doc(db, 'test', 'connection'));
+      console.log("[Firebase] Successfully connected to Firestore.");
+    } catch (error: any) {
+      attempt++;
+      if (attempt <= MAX_RETRIES && (error.message.includes('the client is offline') || error.message.includes('unavailable') || error.code === 'deadline-exceeded')) {
+        console.warn(`[Firebase] Connection attempt ${attempt} failed, retrying in 2s...`);
+        setTimeout(tryConnect, 2000);
+        return;
+      }
+
+      if(error instanceof Error) {
+        if (error.message.includes('the client is offline') || error.message.includes('unavailable')) {
+          console.error("Firebase connection error: The backend is unavailable or the client is offline. Please ensure the Firestore database is provisioned and your Firebase project is healthy.");
+          console.error("Technical Details:", error.message);
+        } else {
+          console.error("Firebase Connection Warning:", error.message);
+        }
       }
     }
-  }
+  };
+  
+  tryConnect();
 }
 testConnection();

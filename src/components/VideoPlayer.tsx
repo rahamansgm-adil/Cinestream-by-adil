@@ -93,9 +93,13 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
 
     const isIframe = firstSource.includes('vidking.net') || 
                      firstSource.includes('vidking.com') || 
+                     firstSource.includes('mhdtvhub.com') ||
+                     firstSource.includes('mhdtvlive.com') ||
+                     firstSource.includes('mhdtv-world.com') ||
                      firstSource.includes('/embed/') ||
                      firstSource.includes('youtube.com/embed') ||
-                     firstSource.includes('player.vimeo.com');
+                     firstSource.includes('player.vimeo.com') ||
+                     (firstSource.startsWith('http') && !firstSource.includes('.m3u8') && !firstSource.includes('.mp4'));
 
     if (isIframe) {
       setIframeUrl(firstSource);

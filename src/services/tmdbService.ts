@@ -11,7 +11,7 @@ export const tmdbService = {
       const response = await axios.get(`${apiBase}/${path}`, { 
         params,
         // Add a retry mechanism or timeout
-        timeout: 15000 
+        timeout: 40000 // Increased to 40s to allow server proxy time to respond
       });
       return response.data;
     } catch (error: any) {

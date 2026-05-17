@@ -13,6 +13,7 @@ import MovieRow from './components/MovieRow';
 import MovieDetails from './components/MovieDetails';
 import VideoPlayer from './components/VideoPlayer';
 import AddMovieForm from './components/AddMovieForm';
+import { LiveTV } from './components/LiveTV';
 import { UserLoginModal } from './components/UserLoginModal';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
@@ -36,7 +37,7 @@ export default function App() {
     primeVideo: [],
     searchResults: []
   });
-  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie'>('all');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie' | 'live'>('all');
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const progressRef = useRef<UserProgress[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -294,11 +295,17 @@ export default function App() {
   const isEmbed = useMemo(() => {
     if (!playingMovie) return false;
     const url = playingMovie.videoUrl || '';
+    const isLive = playingMovie.rating === 'LIVE';
+    
     return url.includes('vidking.net') || 
            url.includes('youtube.com/embed') || 
            url.includes('vimeo.com/video') ||
+           url.includes('mhdtvhub.com') ||
+           url.includes('mhdtvlive.com') ||
+           url.includes('mhdtv-world.com') ||
            url.includes('player.') ||
-           url.startsWith('/embed/');
+           url.startsWith('/embed/') ||
+           (isLive && !url.includes('.m3u8') && !url.includes('.mp4'));
   }, [playingMovie]);
 
   const videoJsOptions = useMemo(() => {
@@ -309,12 +316,16 @@ export default function App() {
     let type = 'video/mp4'; // Default
     
     const isDrive = url.includes('drive.google.com');
+    const isHLS = url.includes('.m3u8');
+    
     if (isDrive) {
       const driveId = url.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/)?.[1];
       if (driveId) {
         src = `/api/stream?id=${driveId}`;
       }
       type = 'video/mp4';
+    } else if (isHLS) {
+      type = 'application/x-mpegURL';
     }
 
     const tracks = playingMovie.subtitles?.map(s => ({
@@ -370,136 +381,142 @@ export default function App() {
       <main className="pb-40">
         {!searchQuery ? (
           <>
-            {featuredMovie && (
-              <Hero 
-                movie={featuredMovie} 
-                onPlay={handlePlay} 
-                onMoreInfo={handleMovieSelect} 
-              />
-            )}
-    
-            <div className={cn("relative z-10 pb-20", !featuredMovie && "pt-32")}>
-              {continueWatchingMovies.length > 0 && (
-                <MovieRow 
-                  key="continue-watching"
-                  title="Continue Watching"
-                  movies={continueWatchingMovies as any}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
- 
-              {filterMovies(tmdbMovies.netflix).length > 0 && (
-                <MovieRow 
-                  key="netflix-originals"
-                  title="Netflix Originals"
-                  movies={filterMovies(tmdbMovies.netflix)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
- 
-              {filterMovies(tmdbMovies.jioHotstar).length > 0 && (
-                <MovieRow 
-                  key="jio-hotstar"
-                  title="JioCinema & Hotstar"
-                  movies={filterMovies(tmdbMovies.jioHotstar)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
- 
-              {filterMovies(tmdbMovies.primeVideo).length > 0 && (
-                <MovieRow 
-                  key="prime-video"
-                  title="Amazon Prime Video"
-                  movies={filterMovies(tmdbMovies.primeVideo)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
- 
-              {filterMovies(tmdbMovies.trending).length > 0 && (
-                <MovieRow 
-                  key="trending-now"
-                  title="Trending Now"
-                  movies={filterMovies(tmdbMovies.trending)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
- 
-              {filterMovies(tmdbMovies.popular).length > 0 && (
-                <MovieRow 
-                  key="popular-on-cinestream"
-                  title="Popular on CineStream"
-                  movies={filterMovies(tmdbMovies.popular)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
- 
-              {filterMovies(tmdbMovies.latest).length > 0 && (
-                <MovieRow 
-                  key="latest-releases"
-                  title="Latest Releases"
-                  movies={filterMovies(tmdbMovies.latest)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
- 
-              {filterMovies(tmdbMovies.topRated).length > 0 && (
-                <MovieRow 
-                  key="top-rated-movies"
-                  title="Top Rated Movies"
-                  movies={filterMovies(tmdbMovies.topRated)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
-
-              {CATEGORIES.map((category) => {
-                const categoryMovies = filterMovies(allMovies.filter(m => category.movieIds.includes(m.id)));
-                if (categoryMovies.length === 0) return null;
-                return (
-                  <MovieRow 
-                    key={category.id}
-                    title={category.title}
-                    movies={categoryMovies}
-                    onMovieClick={handleMovieSelect}
+            {activeCategory === 'live' ? (
+              <LiveTV onPlay={handlePlay} />
+            ) : (
+              <>
+                {featuredMovie && (
+                  <Hero 
+                    movie={featuredMovie} 
+                    onPlay={handlePlay} 
+                    onMoreInfo={handleMovieSelect} 
                   />
-                );
-              })}
-
-              {allMovies.length > 0 && (
-                <MovieRow 
-                  key="all-content-row"
-                  title="All Content"
-                  movies={allMovies}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
-
-              {allMovies.filter(m => m.contentType === 'tv').length > 0 && (
-                <MovieRow 
-                  key="tv-shows-all"
-                  title="TV Shows"
-                  movies={allMovies.filter(m => m.contentType === 'tv')}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
-
-              {allMovies.filter(m => m.contentType === 'movie').length > 0 && (
-                <MovieRow 
-                  key="movies-all"
-                  title="Popular Movies"
-                  movies={allMovies.filter(m => m.contentType === 'movie' || !m.contentType)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
+                )}
+        
+                <div className={cn("relative z-10 pb-20", !featuredMovie && "pt-32")}>
+                  {continueWatchingMovies.length > 0 && (
+                    <MovieRow 
+                      key="continue-watching"
+                      title="Continue Watching"
+                      movies={continueWatchingMovies as any}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
     
-              {allMovies.length > initialMovies.length && (
-                <MovieRow 
-                  key="recently-added-row"
-                  title="Recently Added"
-                  movies={allMovies.slice(0, allMovies.length - initialMovies.length)}
-                  onMovieClick={handleMovieSelect}
-                />
-              )}
-            </div>
+                  {filterMovies(tmdbMovies.netflix).length > 0 && (
+                    <MovieRow 
+                      key="netflix-originals"
+                      title="Netflix Originals"
+                      movies={filterMovies(tmdbMovies.netflix)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {filterMovies(tmdbMovies.jioHotstar).length > 0 && (
+                    <MovieRow 
+                      key="jio-hotstar"
+                      title="JioCinema & Hotstar"
+                      movies={filterMovies(tmdbMovies.jioHotstar)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {filterMovies(tmdbMovies.primeVideo).length > 0 && (
+                    <MovieRow 
+                      key="prime-video"
+                      title="Amazon Prime Video"
+                      movies={filterMovies(tmdbMovies.primeVideo)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {filterMovies(tmdbMovies.trending).length > 0 && (
+                    <MovieRow 
+                      key="trending-now"
+                      title="Trending Now"
+                      movies={filterMovies(tmdbMovies.trending)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {filterMovies(tmdbMovies.popular).length > 0 && (
+                    <MovieRow 
+                      key="popular-on-cinestream"
+                      title="Popular on CineStream"
+                      movies={filterMovies(tmdbMovies.popular)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {filterMovies(tmdbMovies.latest).length > 0 && (
+                    <MovieRow 
+                      key="latest-releases"
+                      title="Latest Releases"
+                      movies={filterMovies(tmdbMovies.latest)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {filterMovies(tmdbMovies.topRated).length > 0 && (
+                    <MovieRow 
+                      key="top-rated-movies"
+                      title="Top Rated Movies"
+                      movies={filterMovies(tmdbMovies.topRated)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {CATEGORIES.map((category) => {
+                    const categoryMovies = filterMovies(allMovies.filter(m => category.movieIds.includes(m.id)));
+                    if (categoryMovies.length === 0) return null;
+                    return (
+                      <MovieRow 
+                        key={category.id}
+                        title={category.title}
+                        movies={categoryMovies}
+                        onMovieClick={handleMovieSelect}
+                      />
+                    );
+                  })}
+    
+                  {allMovies.length > 0 && (
+                    <MovieRow 
+                      key="all-content-row"
+                      title="All Content"
+                      movies={allMovies}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {allMovies.filter(m => m.contentType === 'tv').length > 0 && (
+                    <MovieRow 
+                      key="tv-shows-all"
+                      title="TV Shows"
+                      movies={allMovies.filter(m => m.contentType === 'tv')}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+    
+                  {allMovies.filter(m => m.contentType === 'movie').length > 0 && (
+                    <MovieRow 
+                      key="movies-all"
+                      title="Popular Movies"
+                      movies={allMovies.filter(m => m.contentType === 'movie' || !m.contentType)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+        
+                  {allMovies.length > initialMovies.length && (
+                    <MovieRow 
+                      key="recently-added-row"
+                      title="Recently Added"
+                      movies={allMovies.slice(0, allMovies.length - initialMovies.length)}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </>
         ) : (
           <div className="pt-32 px-4 md:px-12">

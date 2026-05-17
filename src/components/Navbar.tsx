@@ -7,8 +7,8 @@ import { useAuth } from '../context/AuthContext';
 interface NavbarProps {
   onAddMovieClick: () => void;
   onAddTVShowClick: () => void;
-  onCategoryChange: (category: 'all' | 'tv' | 'movie') => void;
-  activeCategory: 'all' | 'tv' | 'movie';
+  onCategoryChange: (category: 'all' | 'tv' | 'movie' | 'live') => void;
+  activeCategory: 'all' | 'tv' | 'movie' | 'live';
   user: FirebaseUser | null;
   onLogin: () => void;
   onLogout: () => void;
@@ -76,6 +76,12 @@ export const Navbar = ({
             className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'movie' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
           >
             Movies
+          </li>
+          <li 
+            onClick={() => onCategoryChange('live')}
+            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'live' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
+          >
+            Live TV
           </li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">New & Popular</li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">My List</li>

@@ -35,6 +35,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email == 'rahamansgmadil2@gmail.com';
     }
 
+    // Connectivity test rule
+    match /test/connection {
+      allow read: if true;
+    }
+
     // Movie validation
     function isValidMovie(data) {
       return data.keys().hasAll(['title', 'videoUrl', 'thumbnailUrl', 'createdAt', 'createdBy']) &&

@@ -6,22 +6,36 @@ import axios from "axios";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
+import fs from "fs";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
+
+// Load configuration from firebase-applet-config.json
+const CONFIG_PATH = path.join(process.cwd(), "firebase-applet-config.json");
+let firebaseConfig: any = {};
+
+try {
+  if (fs.existsSync(CONFIG_PATH)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+    console.log(`[Config] Loaded Firebase config for project: ${firebaseConfig.projectId}`);
+  }
+} catch (err) {
+  console.error("[Config] Error loading firebase-applet-config.json:", err);
+}
 
 // Initialize Firebase Admin
 let adminApp;
 if (getApps().length === 0) {
   adminApp = initializeApp({
-    projectId: "gen-lang-client-0142261778"
+    projectId: firebaseConfig.projectId || "gen-lang-client-0142261778"
   });
 } else {
   adminApp = getApps()[0];
 }
 
 // Target specific database if possible, otherwise use default
-const DB_ID = "ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281";
+const DB_ID = firebaseConfig.firestoreDatabaseId || "ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281";
 let adminDb = getFirestore(adminApp, DB_ID);
 const adminAuth = getAdminAuth(adminApp);
 
@@ -64,6 +78,7 @@ async function startServer() {
 
   console.log("[EnvCheck] PROJECT_ID:", process.env.GOOGLE_CLOUD_PROJECT);
   console.log("[EnvCheck] FIREBASE_CONFIG:", process.env.FIREBASE_CONFIG ? "Exists" : "Missing");
+  console.log("[EnvCheck] TMDB_API_KEY:", process.env.TMDB_API_KEY ? `Present (length: ${process.env.TMDB_API_KEY.length})` : "Missing");
 
   // Advanced CORS Configuration for Media Streaming
   app.use(cors({
@@ -346,7 +361,7 @@ async function startServer() {
 
       const response = await axios.get(url, { 
         headers,
-        timeout: 10000 
+        timeout: 30000 // Increased timeout to 30s for slower networks
       });
       
       res.json(response.data);
