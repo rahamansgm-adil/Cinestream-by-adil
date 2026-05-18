@@ -519,10 +519,10 @@ export default function App() {
             )}
           </>
         ) : (
-          <div className="pt-32 px-4 md:px-12">
-            <h2 className="text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
+          <div className="pt-24 md:pt-32 px-4 md:px-12">
+            <h2 className="text-xl md:text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
             {allMovies.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-10 gap-x-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-6 md:gap-y-10 gap-x-3 md:gap-x-4">
                 {allMovies.map(movie => (
                   <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="cursor-pointer">
                     <img 

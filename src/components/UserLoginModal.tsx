@@ -33,7 +33,7 @@ export const UserLoginModal: React.FC<UserLoginModalProps> = ({ onClose }) => {
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-8 overflow-hidden"
+        className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-6 md:p-8 overflow-hidden"
       >
         <button 
           onClick={onClose}

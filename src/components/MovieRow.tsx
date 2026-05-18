@@ -22,22 +22,22 @@ export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieClick 
 
   return (
     <div className="space-y-4 mb-4 mt-8 group">
-      <h2 className="text-xl font-bold text-gray-200 px-12 group-hover:text-white transition-colors uppercase tracking-tight">
+      <h2 className="text-xl font-bold text-gray-200 px-4 md:px-12 group-hover:text-white transition-colors uppercase tracking-tight">
         {title}
       </h2>
       
       <div className="relative">
-        {/* Left Arrow */}
+        {/* Left Arrow - Hide on mobile, use native scroll */}
         <button 
           onClick={() => scroll('left')}
-          className="absolute left-0 top-0 bottom-0 z-40 w-12 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60 backdrop-blur-sm"
+          className="absolute left-0 top-0 bottom-0 z-40 w-12 bg-black/40 text-white hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60 backdrop-blur-sm"
         >
           <ChevronLeft size={32} />
         </button>
 
         <div 
           ref={rowRef}
-          className="movie-row-scroll gap-2 px-12 py-2"
+          className="movie-row-scroll gap-2 px-4 md:px-12 py-2"
         >
           {movies.map((movie) => (
             <MovieCard 
@@ -48,10 +48,10 @@ export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieClick 
           ))}
         </div>
 
-        {/* Right Arrow */}
+        {/* Right Arrow - Hide on mobile */}
         <button 
           onClick={() => scroll('right')}
-          className="absolute right-0 top-0 bottom-0 z-40 w-12 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60 backdrop-blur-sm"
+          className="absolute right-0 top-0 bottom-0 z-40 w-12 bg-black/40 text-white hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60 backdrop-blur-sm"
         >
           <ChevronRight size={32} />
         </button>

@@ -179,6 +179,28 @@ export const tmdbService = {
     const movie = this.mapToMovie(data, type);
     movie.genres = (data.genres || []).map((g: any) => g.name);
     movie.cast = (data.credits?.cast || []).slice(0, 10).map((c: any) => c.name);
+    
+    // Enrich with Cast Details (Images and Characters)
+    movie.castDetails = (data.credits?.cast || []).slice(0, 12).map((c: any) => ({
+      id: String(c.id),
+      name: c.name,
+      character: c.character,
+      profileUrl: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null
+    }));
+
+    // Find Director
+    const director = data.credits?.crew?.find((c: any) => c.job === 'Director' || c.job === 'Executive Producer');
+    if (director) {
+      movie.director = {
+        id: String(director.id),
+        name: director.name,
+        job: director.job,
+        department: director.department,
+        profileUrl: director.profile_path ? `https://image.tmdb.org/t/p/w185${director.profile_path}` : null,
+        bio: '' // Bio requires another API call, we'll keep it simple for now or fetch if needed
+      };
+    }
+
     movie.duration = type === 'tv' 
       ? `${data.number_of_seasons} Season${data.number_of_seasons > 1 ? 's' : ''}`
       : `${data.runtime} min`;

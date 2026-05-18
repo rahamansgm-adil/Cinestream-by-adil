@@ -74,7 +74,7 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
   };
 
   return (
-    <div className="relative h-[80vh] md:h-[85vh] w-full flex flex-col justify-end px-12 pb-32 overflow-hidden">
+    <div className="relative h-[80vh] md:h-[85vh] w-full flex flex-col justify-end px-4 md:px-12 pb-20 md:pb-32 overflow-hidden">
       {/* Background Layer */}
       <div className="absolute inset-0 z-0">
         <img 
@@ -132,23 +132,23 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 max-w-xl">
+      <div className="relative z-10 max-w-full md:max-w-xl text-center md:text-left">
         <motion.div
            initial={{ opacity: 0, y: 20 }}
            animate={{ opacity: 1, y: 0 }}
            transition={{ duration: 0.8 }}
-           className="flex items-center gap-2 mb-4"
+           className="flex items-center justify-center md:justify-start gap-2 mb-2 md:mb-4"
         >
           {movie.contentType === 'tv' && (
-            <span className="px-2 py-0.5 bg-white/20 backdrop-blur-md rounded text-[10px] font-black tracking-widest text-white uppercase border border-white/10">
+            <span className="px-2 py-0.5 bg-white/20 backdrop-blur-md rounded text-[9px] md:text-[10px] font-black tracking-widest text-white uppercase border border-white/10">
               TV SHOW
             </span>
           )}
-          <span className="text-gray-400 text-sm font-bold tracking-widest">{movie.year}</span>
+          <span className="text-gray-400 text-xs md:text-sm font-bold tracking-widest">{movie.year}</span>
         </motion.div>
 
         <motion.h1 
-          className="text-5xl md:text-7xl font-bold mb-4 tracking-tight text-white uppercase"
+          className="text-3xl sm:text-4xl md:text-7xl font-bold mb-3 md:mb-4 tracking-tight text-white uppercase leading-tight"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
@@ -157,7 +157,7 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
         </motion.h1>
         
         <motion.p 
-          className="text-lg text-gray-200 mb-8 line-clamp-3 leading-relaxed font-light drop-shadow-md"
+          className="text-sm md:text-lg text-gray-200 mb-6 md:mb-8 line-clamp-2 md:line-clamp-3 leading-relaxed font-light drop-shadow-md max-w-lg mx-auto md:mx-0"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
@@ -166,29 +166,30 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
         </motion.p>
 
         <motion.div 
-          className="flex items-center gap-3"
+          className="flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-3"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
         >
           <button 
             onClick={handlePlayClick}
-            className="flex items-center justify-center gap-2 bg-white text-black px-8 py-3 rounded hover:bg-white/90 transition-colors font-bold shadow-lg"
+            className="flex items-center justify-center gap-2 bg-white text-black px-4 md:px-8 py-2 md:py-3 rounded hover:bg-white/90 transition-all font-bold shadow-lg text-sm md:text-base active:scale-95"
           >
-            <Play size={24} fill="black" /> {movie.contentType === 'tv' ? 'S1:E1 Play' : 'Play'}
-          </button>
-          <button 
-            onClick={handleDownload}
-            className="flex items-center justify-center p-3 bg-gray-500/50 text-white rounded hover:bg-gray-500/40 transition-colors backdrop-blur-md border border-white/10"
-            title="Download"
-          >
-            <Download size={24} />
+            <Play size={20} className="md:w-6 md:h-6" fill="black" /> 
+            <span>{movie.contentType === 'tv' ? 'S1:E1 Play' : 'Play'}</span>
           </button>
           <button 
             onClick={() => onMoreInfo(movie)}
-            className="flex items-center justify-center gap-2 bg-gray-500/50 text-white px-8 py-3 rounded hover:bg-gray-500/40 transition-colors font-bold backdrop-blur-md border border-white/10"
+            className="flex items-center justify-center gap-2 bg-gray-500/50 text-white px-4 md:px-8 py-2 md:py-3 rounded hover:bg-gray-500/40 transition-all font-bold backdrop-blur-md border border-white/10 text-sm md:text-base active:scale-95"
           >
-            <Info size={24} /> More Info
+            <Info size={20} className="md:w-6 md:h-6" /> More Info
+          </button>
+          <button 
+            onClick={handleDownload}
+            className="flex items-center justify-center p-2 md:p-3 bg-gray-500/50 text-white rounded hover:bg-gray-500/40 transition-all backdrop-blur-md border border-white/10 active:scale-95"
+            title="Download"
+          >
+            <Download size={20} className="md:w-6 md:h-6" />
           </button>
         </motion.div>
       </div>
@@ -199,9 +200,9 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           onClick={() => setIsMuted(!isMuted)}
-          className="absolute bottom-32 right-12 md:right-24 p-2 border-2 border-white/40 rounded-full text-white hover:bg-white/10 transition-colors z-20"
+          className="absolute bottom-20 md:bottom-32 right-4 md:right-24 p-2 border border-white/40 rounded-full text-white hover:bg-white/10 transition-colors z-20"
         >
-          {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+          {isMuted ? <VolumeX size={18} className="md:w-5 md:h-5" /> : <Volume2 size={18} className="md:w-5 md:h-5" />}
         </motion.button>
       )}
     </div>

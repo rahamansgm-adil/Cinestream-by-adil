@@ -16,6 +16,22 @@ export interface Episode {
   subtitles?: Subtitle[];
 }
 
+export interface CastMember {
+  id: string;
+  name: string;
+  character: string;
+  profileUrl: string | null;
+}
+
+export interface CrewMember {
+  id: string;
+  name: string;
+  job: string;
+  department: string;
+  profileUrl: string | null;
+  bio?: string;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -30,6 +46,8 @@ export interface Movie {
   rating: string;
   genres: string[];
   cast: string[];
+  castDetails?: CastMember[];
+  director?: CrewMember;
   contentType?: 'movie' | 'tv';
   episodes?: Episode[];
   subtitles?: Subtitle[];
