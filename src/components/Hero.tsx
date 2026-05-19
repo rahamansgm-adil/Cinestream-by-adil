@@ -24,7 +24,7 @@ export const Hero = ({ movies, onPlay, onMoreInfo }: HeroProps) => {
     if (movies.length <= 1) return;
     intervalRef.current = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % movies.length);
-    }, 3000);
+    }, 15000);
   };
 
   useEffect(() => {
