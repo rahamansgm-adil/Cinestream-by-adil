@@ -37,7 +37,7 @@ export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieClick 
 
         <div 
           ref={rowRef}
-          className="movie-row-scroll gap-2 px-4 md:px-12 py-2"
+          className="movie-row-scroll gap-4 px-4 md:px-12 py-4"
         >
           {movies.map((movie) => (
             <MovieCard 

@@ -50,6 +50,20 @@
         "contentType": { "type": "string" }
       },
       "required": ["movieId", "userId", "progress", "duration", "lastWatched"]
+    },
+    "MyListItem": {
+      "title": "User My List Item",
+      "description": "A movie or TV show added to a user's personal list",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "movieId": { "type": "string" },
+        "addedAt": { "type": "string", "format": "date-time" },
+        "title": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "contentType": { "type": "string" }
+      },
+      "required": ["userId", "movieId", "addedAt"]
     }
   },
   "firestore": {
@@ -60,6 +74,10 @@
     "/userProgress/{progressId}": {
       "schema": "UserProgress",
       "description": "User watch progress"
+    },
+    "/myList/{itemId}": {
+      "schema": "MyListItem",
+      "description": "User's favorite movies and TV shows"
     }
   }
 }

@@ -15,7 +15,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
 
   return (
     <motion.div 
-      className="relative group min-w-[160px] sm:min-w-[200px] md:min-w-[240px] h-[90px] sm:h-[112px] md:h-[135px] cursor-pointer rounded overflow-hidden border border-transparent hover:border-white/50 transition-all duration-300"
+      className="relative group min-w-[140px] sm:min-w-[180px] md:min-w-[220px] aspect-[2/3] cursor-pointer rounded-md overflow-hidden border border-transparent hover:border-white/50 transition-all duration-500 shadow-2xl"
       initial={{ opacity: 1 }}
       whileHover={{ scale: 1.05, zIndex: 10 }}
       onClick={() => onClick(movie)}

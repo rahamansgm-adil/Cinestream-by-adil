@@ -241,7 +241,12 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
         fetchSeason(1);
       }
 
-      setContentGenreInput(data.genres?.map((g: any) => g.name).join(', ') || '');
+      const rawGenres = data.genres?.map((g: any) => g.name) || [];
+      if (rawGenres.includes('Romance') && rawGenres.includes('Comedy')) {
+        if (!rawGenres.includes('RomCom')) rawGenres.push('RomCom');
+      }
+      setContentGenreInput(rawGenres.join(', '));
+
       setContentCastInput(data.credits?.cast?.slice(0, 10).map((c: any) => c.name).join(', ') || '');
       
       setTmdbResults([]);
@@ -931,8 +936,32 @@ export const AddMovieForm: React.FC<AddMovieFormProps> = ({ onAdd, onClose, type
               </div>
 
               {/* Genres & Cast */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Genres (comma separated)</label>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Genres</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {['Action', 'RomCom', 'Romance', 'Comedy', 'Drama', 'Thriller', 'Horror', 'Sci-Fi', 'War', 'History', 'Documentary'].map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => {
+                        const current = contentGenreInput.split(',').map(item => item.trim()).filter(Boolean);
+                        if (current.includes(g)) {
+                          setContentGenreInput(current.filter(item => item !== g).join(', '));
+                        } else {
+                          setContentGenreInput(current.length > 0 ? `${contentGenreInput}, ${g}` : g);
+                        }
+                      }}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all",
+                        contentGenreInput.split(',').map(item => item.trim()).includes(g) 
+                          ? "bg-netflix-red border-netflix-red text-white" 
+                          : "bg-zinc-800/50 border-white/5 text-zinc-500 hover:border-white/20 hover:text-zinc-300"
+                      )}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
                 <input 
                   type="text"
                   placeholder="Action, Sci-Fi"

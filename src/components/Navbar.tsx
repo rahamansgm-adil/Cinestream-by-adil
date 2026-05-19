@@ -8,8 +8,8 @@ import { motion, AnimatePresence } from 'motion/react';
 interface NavbarProps {
   onAddMovieClick: () => void;
   onAddTVShowClick: () => void;
-  onCategoryChange: (category: 'all' | 'tv' | 'movie' | 'live') => void;
-  activeCategory: 'all' | 'tv' | 'movie' | 'live';
+  onCategoryChange: (category: 'all' | 'tv' | 'movie' | 'live' | 'my-list') => void;
+  activeCategory: 'all' | 'tv' | 'movie' | 'live' | 'my-list';
   user: FirebaseUser | null;
   onLogin: () => void;
   onLogout: () => void;
@@ -87,7 +87,12 @@ export const Navbar = ({
             Live TV
           </li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">New & Popular</li>
-          <li className="hover:text-gray-400 cursor-pointer transition-colors">My List</li>
+          <li 
+            onClick={() => onCategoryChange('my-list')}
+            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'my-list' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
+          >
+            My List
+          </li>
           
           {isAdmin && (
             <div className="flex items-center gap-3 ml-6 pl-6 border-l border-white/20">
@@ -273,6 +278,11 @@ export const Navbar = ({
                   active={activeCategory === 'live'} 
                   onClick={() => { onCategoryChange('live'); setIsMobileMenuOpen(false); }}
                   label="Live TV"
+                />
+                <MobileMenuItem 
+                  active={activeCategory === 'my-list'} 
+                  onClick={() => { onCategoryChange('my-list'); setIsMobileMenuOpen(false); }}
+                  label="My List"
                 />
               </div>
 

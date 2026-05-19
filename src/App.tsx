@@ -35,9 +35,14 @@ export default function App() {
     latest: [],
     jioHotstar: [],
     primeVideo: [],
+    action: [],
+    comedy: [],
+    drama: [],
+    romance: [],
+    war: [],
     searchResults: []
   });
-  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie' | 'live'>('all');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie' | 'live' | 'my-list'>('all');
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const progressRef = useRef<UserProgress[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -51,6 +56,7 @@ export default function App() {
   const [showUserLogin, setShowUserLogin] = useState(false);
   const [tmdbError, setTmdbError] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [myListIds, setMyListIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const { isAdmin } = useAuth();
 
@@ -65,16 +71,25 @@ export default function App() {
       ...tmdbMovies.topRated,
       ...tmdbMovies.latest,
       ...tmdbMovies.jioHotstar,
-      ...tmdbMovies.primeVideo
+      ...tmdbMovies.primeVideo,
+      ...tmdbMovies.action,
+      ...tmdbMovies.comedy,
+      ...tmdbMovies.drama,
+      ...tmdbMovies.romance,
+      ...tmdbMovies.war
     ];
     const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
     
     let filtered = unique;
     if (activeCategory !== 'all') {
-      filtered = unique.filter(m => {
-        if (activeCategory === 'tv') return m.contentType === 'tv';
-        return m.contentType === 'movie' || !m.contentType;
-      });
+      if (activeCategory === 'my-list') {
+        filtered = unique.filter(m => myListIds.includes(m.id));
+      } else {
+        filtered = unique.filter(m => {
+          if (activeCategory === 'tv') return m.contentType === 'tv';
+          return m.contentType === 'movie' || !m.contentType;
+        });
+      }
     }
 
     if (!searchQuery.trim()) return filtered;
@@ -106,7 +121,7 @@ export default function App() {
         return false;
       }
     });
-  }, [dbMovies, movies, searchQuery]);
+  }, [dbMovies, movies, tmdbMovies, searchQuery, activeCategory, myListIds]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -126,7 +141,10 @@ export default function App() {
     });
 
     let unsubscribeProgress = () => {};
+    let unsubscribeMyList = () => {};
+
     if (user) {
+      // Progress
       const progressQuery = query(
         collection(db, 'userProgress'), 
         where('userId', '==', user.uid),
@@ -139,14 +157,32 @@ export default function App() {
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'userProgress');
       });
+
+      // My List
+      const myListQuery = query(
+        collection(db, 'myList'),
+        where('userId', '==', user.uid)
+      );
+      unsubscribeMyList = onSnapshot(myListQuery, (snapshot) => {
+        const items = snapshot.docs.map(doc => doc.data());
+        // Sort by addedAt desc client-side
+        const sortedIds = items
+          .sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0))
+          .map(item => item.movieId as string);
+        setMyListIds(sortedIds);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'myList');
+      });
     } else {
       setUserProgress([]);
+      setMyListIds([]);
     }
 
     return () => {
       unsubscribeAuth();
       unsubscribeMovies();
       unsubscribeProgress();
+      unsubscribeMyList();
     };
   }, [user]);
 
@@ -154,24 +190,30 @@ export default function App() {
     const fetchInitial = async () => {
       console.log("[App] Starting initial catalog fetch...");
       try {
-        const [trending, popular, netflix, latest, topRated, jioHotstar, primeVideo] = await Promise.all([
+        const [
+          trending, popular, netflix, latest, topRated, 
+          jioHotstar, primeVideo,
+          actionMovies, actionTV,
+          comedyMovies, comedyTV,
+          dramaMovies, dramaTV,
+          romanceMovies, romanceTV,
+          warMovies, warTV
+        ] = await Promise.all([
           tmdbService.getTrending(),
           tmdbService.getPopular(),
           tmdbService.getNetflixOriginals(),
           tmdbService.getLatestRelease(),
           tmdbService.getTopRated(),
           tmdbService.getJioHotstarContent(),
-          tmdbService.getAmazonPrimeContent()
+          tmdbService.getAmazonPrimeContent(),
+          // Genres
+          tmdbService.getByGenre(28, 'movie'), tmdbService.getByGenre(10759, 'tv'), // Action
+          tmdbService.getByGenre(35, 'movie'), tmdbService.getByGenre(35, 'tv'),    // Comedy
+          tmdbService.getByGenre(18, 'movie'), tmdbService.getByGenre(18, 'tv'),    // Drama
+          tmdbService.getByGenre(10749, 'movie'), tmdbService.getByGenre(10749, 'tv'), // Romance
+          tmdbService.getByGenre(10752, 'movie'), tmdbService.getByGenre(10768, 'tv')  // War
         ]);
         
-        console.log("[App] Catalog fetch completed:", {
-          trending: trending?.length || 0,
-          popular: popular?.length || 0,
-          netflix: netflix?.length || 0,
-          jioHotstar: jioHotstar?.length || 0,
-          primeVideo: primeVideo?.length || 0
-        });
-
         setTmdbMovies(prev => ({
           ...prev,
           trending: trending || [],
@@ -180,7 +222,12 @@ export default function App() {
           latest: latest || [],
           topRated: topRated || [],
           jioHotstar: jioHotstar || [],
-          primeVideo: primeVideo || []
+          primeVideo: primeVideo || [],
+          action: [...(actionMovies || []), ...(actionTV || [])],
+          comedy: [...(comedyMovies || []), ...(comedyTV || [])],
+          drama: [...(dramaMovies || []), ...(dramaTV || [])],
+          romance: [...(romanceMovies || []), ...(romanceTV || [])],
+          war: [...(warMovies || []), ...(warTV || [])]
         }));
       } catch (err: any) {
         console.error("[App] Failed to fetch initial catalog:", err);
@@ -224,6 +271,11 @@ export default function App() {
       };
     }).filter(Boolean) as (Movie & { progress: number; totalDuration: number; progressId: string })[];
   }, [allMovies, userProgress, user]);
+
+  const myListMovies = useMemo(() => {
+    if (!user || myListIds.length === 0) return [];
+    return myListIds.map(id => allMovies.find(m => m.id === id)).filter(Boolean) as Movie[];
+  }, [allMovies, myListIds, user]);
 
   const featuredMovie = allMovies[0];
 
@@ -383,6 +435,64 @@ export default function App() {
           <>
             {activeCategory === 'live' ? (
               <LiveTV onPlay={handlePlay} />
+            ) : activeCategory === 'my-list' ? (
+              <div className="pt-32 px-4 md:px-12">
+                <div className="flex items-center gap-4 mb-8">
+                   <h1 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">My List</h1>
+                   <div className="h-px flex-1 bg-white/10" />
+                   <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">{myListMovies.length} Items</span>
+                </div>
+                
+                {myListMovies.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-40 gap-6">
+                    <div className="p-8 rounded-full bg-zinc-900 border border-white/5 shadow-2xl">
+                      <Plus size={48} className="text-zinc-700" />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <h3 className="text-xl font-black text-white uppercase tracking-widest">Your list is empty</h3>
+                      <p className="text-zinc-500 text-xs font-bold max-w-xs mx-auto">Add movies and TV shows to your list to keep track of what you want to watch next.</p>
+                    </div>
+                    <button 
+                      onClick={() => setActiveCategory('all')}
+                      className="px-8 py-3 bg-white text-black text-xs font-black uppercase tracking-widest rounded hover:bg-zinc-200 transition-all active:scale-95"
+                    >
+                      Browse Content
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-y-8 md:gap-y-12 gap-x-4 md:gap-x-6">
+                    {myListMovies.map((movie) => (
+                      <div 
+                        key={movie.id}
+                        onClick={() => handleMovieSelect(movie)}
+                        className="group relative cursor-pointer"
+                      >
+                        <div className="relative aspect-[2/3] rounded-md overflow-hidden bg-zinc-900 border border-white/5 hover:scale-105 transition-all duration-300 shadow-xl group/card">
+                           <img 
+                              src={movie.thumbnailUrl} 
+                              alt={movie.title}
+                              className="w-full h-full object-cover group-hover/card:opacity-40 transition-opacity"
+                              referrerPolicy="no-referrer"
+                           />
+                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                              <div className="p-1 px-2 bg-netflix-red w-fit rounded-sm mb-2 scale-75 origin-left">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-white leading-none">Play</span>
+                              </div>
+                              <h3 className="text-[10px] font-black text-white uppercase tracking-tighter leading-tight line-clamp-2">{movie.title}</h3>
+                           </div>
+                        </div>
+                        <div className="mt-3">
+                           <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-netflix-red tracking-tight">{movie.year}</span>
+                              <span className="w-1 h-1 bg-zinc-800 rounded-full" />
+                              <span className="text-[10px] font-bold text-zinc-500 capitalize">{movie.contentType || 'movie'}</span>
+                           </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 {featuredMovie && (
@@ -394,6 +504,15 @@ export default function App() {
                 )}
         
                 <div className={cn("relative z-10 pb-20", !featuredMovie && "pt-32")}>
+                  {myListMovies.length > 0 && (
+                    <MovieRow 
+                      key="my-list-row"
+                      title="My List"
+                      movies={myListMovies}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+
                   {continueWatchingMovies.length > 0 && (
                     <MovieRow 
                       key="continue-watching"
@@ -466,6 +585,52 @@ export default function App() {
                     />
                   )}
     
+                  {/* Genre Based Rows */}
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('romcom') || (g.toLowerCase().includes('romance') && g.toLowerCase().includes('comedy'))))).length > 0 && (
+                    <MovieRow 
+                      key="genre-romcom"
+                      title="RomComs"
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('romcom') || (g.toLowerCase().includes('romance') && g.toLowerCase().includes('comedy')))))}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('action')))).length > 0 && (
+                    <MovieRow 
+                      key="genre-action"
+                      title="Action & Adventure"
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('action'))))}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('comedy') && !g.toLowerCase().includes('romance')))).length > 0 && (
+                    <MovieRow 
+                      key="genre-comedy"
+                      title="Comedies"
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('comedy'))))}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('drama')))).length > 0 && (
+                    <MovieRow 
+                      key="genre-drama"
+                      title="Emotional Dramas"
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('drama'))))}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('war') || g.toLowerCase().includes('history')))).length > 0 && (
+                    <MovieRow 
+                      key="genre-war"
+                      title="War & History"
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('war') || g.toLowerCase().includes('history'))))}
+                      onMovieClick={handleMovieSelect}
+                    />
+                  )}
+
                   {CATEGORIES.map((category) => {
                     const categoryMovies = filterMovies(allMovies.filter(m => category.movieIds.includes(m.id)));
                     if (categoryMovies.length === 0) return null;
@@ -522,15 +687,30 @@ export default function App() {
           <div className="pt-24 md:pt-32 px-4 md:px-12">
             <h2 className="text-xl md:text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
             {allMovies.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-6 md:gap-y-10 gap-x-3 md:gap-x-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-y-8 md:gap-y-12 gap-x-4 md:gap-x-6">
                 {allMovies.map(movie => (
-                  <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="cursor-pointer">
-                    <img 
-                      src={movie.thumbnailUrl} 
-                      alt={movie.title} 
-                      className="w-full aspect-video object-cover rounded-md hover:scale-105 transition-transform duration-300"
-                    />
-                    <h3 className="mt-2 font-medium text-sm text-gray-300">{movie.title}</h3>
+                  <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="group cursor-pointer">
+                    <div className="relative aspect-[2/3] overflow-hidden rounded-md border border-white/5 shadow-2xl hover:scale-105 transition-all duration-300">
+                      <img 
+                        src={movie.thumbnailUrl} 
+                        alt={movie.title} 
+                        className="w-full h-full object-cover group-hover:opacity-40 transition-opacity"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                         <div className="p-1 px-2 bg-netflix-red w-fit rounded-sm mb-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-white leading-none">Play</span>
+                         </div>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <h3 className="font-black text-[10px] md:text-xs text-white uppercase tracking-tighter leading-tight line-clamp-1">{movie.title}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-zinc-500 font-bold">{movie.year}</span>
+                        <span className="w-1 h-1 bg-zinc-700 rounded-full" />
+                        <span className="text-[10px] text-zinc-600 font-bold capitalize">{movie.contentType || 'movie'}</span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -562,6 +742,7 @@ export default function App() {
             user={user}
             onClose={() => setSelectedMovie(null)} 
             onPlay={handlePlay}
+            onMovieClick={handleMovieSelect}
           />
         )}
       </AnimatePresence>

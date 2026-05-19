@@ -66,6 +66,17 @@ service cloud.firestore {
              data.lastWatched == request.time;
     }
 
+    function isValidMyListItem(data) {
+      return data.keys().hasAll(['userId', 'movieId', 'addedAt']) &&
+             data.keys().size() <= 6 &&
+             data.userId == request.auth.uid &&
+             data.movieId is string &&
+             data.addedAt == request.time &&
+             (data.get('title', '') is string && data.get('title', '').size() <= 200) &&
+             (data.get('thumbnailUrl', '') is string && data.get('thumbnailUrl', '').size() <= 1000) &&
+             (data.get('contentType', '') is string && data.get('contentType', '').size() <= 20);
+    }
+
     match /movies/{movieId} {
       allow read: if true; 
       
@@ -88,6 +99,13 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(progressId) && isValidProgress(incoming());
       allow update: if isSignedIn() && isValidProgress(incoming()) && existing().userId == request.auth.uid;
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    match /myList/{itemId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidMyListItem(incoming());
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && isValidMyListItem(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }

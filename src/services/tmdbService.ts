@@ -28,8 +28,24 @@ export const tmdbService = {
     }
   },
 
+  genreMap: {
+    28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
+    99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
+    27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
+    10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western',
+    10759: 'Action & Adventure', 10762: 'Kids', 10763: 'News', 10764: 'Reality',
+    10765: 'Sci-Fi & Fantasy', 10766: 'Soap', 10767: 'Talk', 10768: 'War & Politics'
+  },
+
   mapToMovie(tmdbItem: any, type: 'movie' | 'tv' = 'movie'): Movie {
     const isTV = type === 'tv';
+    const genres = (tmdbItem.genre_ids || []).map((id: number) => (this as any).genreMap[id]).filter(Boolean);
+    
+    // Check for RomCom
+    if (genres.includes('Romance') && genres.includes('Comedy')) {
+      genres.push('RomCom');
+    }
+
     return {
       id: String(tmdbItem.id),
       title: tmdbItem.title || tmdbItem.name || 'Untitled',
@@ -40,22 +56,26 @@ export const tmdbService = {
       duration: isTV ? 'Series' : 'Feature',
       year: (tmdbItem.release_date || tmdbItem.first_air_date || '').split('-')[0] || 'Unknown',
       rating: String(tmdbItem.vote_average || 'NR'),
-      genres: [], // Will be populated if needed
+      genres: genres,
       cast: [],
       contentType: type
     };
   },
 
   async getTrending(type: 'movie' | 'tv' | 'all' = 'all') {
-    const data = await this.fetchFromProxy(`trending/${type}/week`);
-    if (!data || !data.results) return [];
-    return data.results.map((item: any) => this.mapToMovie(item, item.media_type || (type === 'all' ? 'movie' : type)));
+    const pages = [1, 2, 3];
+    const results = await Promise.all(pages.map(page => this.fetchFromProxy(`trending/${type}/week`, { page })));
+    const combined = results.flatMap(data => (data?.results || []));
+    if (combined.length === 0) return [];
+    return combined.map((item: any) => this.mapToMovie(item, item.media_type || (type === 'all' ? 'movie' : type)));
   },
 
   async getPopular(type: 'movie' | 'tv' = 'movie') {
-    const data = await this.fetchFromProxy(`${type}/popular`);
-    if (!data || !data.results) return [];
-    return data.results.map((item: any) => this.mapToMovie(item, type));
+    const pages = [1, 2, 3];
+    const results = await Promise.all(pages.map(page => this.fetchFromProxy(`${type}/popular`, { page })));
+    const combined = results.flatMap(data => (data?.results || []));
+    if (combined.length === 0) return [];
+    return combined.map((item: any) => this.mapToMovie(item, type));
   },
 
   async search(query: string) {
@@ -68,60 +88,73 @@ export const tmdbService = {
 
   async getNetflixOriginals() {
     // TMDB Network ID for Netflix is 213
-    const data = await this.fetchFromProxy('discover/tv', { with_networks: 213, sort_by: 'popularity.desc' });
-    if (!data || !data.results) return [];
-    return data.results.map((item: any) => this.mapToMovie(item, 'tv'));
+    const pages = [1, 2, 3];
+    const results = await Promise.all(pages.map(page => this.fetchFromProxy('discover/tv', { with_networks: 213, sort_by: 'popularity.desc', page })));
+    const combined = results.flatMap(data => (data?.results || []));
+    if (combined.length === 0) return [];
+    return combined.map((item: any) => this.mapToMovie(item, 'tv'));
   },
 
   async getLatestRelease() {
-    const data = await this.fetchFromProxy('movie/now_playing');
-    if (!data || !data.results) return [];
-    return data.results.map((item: any) => this.mapToMovie(item, 'movie'));
+    const pages = [1, 2, 3];
+    const results = await Promise.all(pages.map(page => this.fetchFromProxy('movie/now_playing', { page })));
+    const combined = results.flatMap(data => (data?.results || []));
+    if (combined.length === 0) return [];
+    return combined.map((item: any) => this.mapToMovie(item, 'movie'));
   },
 
   async getTopRated(type: 'movie' | 'tv' = 'movie') {
-    const data = await this.fetchFromProxy(`${type}/top_rated`);
-    if (!data || !data.results) return [];
-    return data.results.map((item: any) => this.mapToMovie(item, type));
+    const pages = [1, 2, 3];
+    const results = await Promise.all(pages.map(page => this.fetchFromProxy(`${type}/top_rated`, { page })));
+    const combined = results.flatMap(data => (data?.results || []));
+    if (combined.length === 0) return [];
+    return combined.map((item: any) => this.mapToMovie(item, type));
   },
 
   async getByGenre(genreId: number, type: 'movie' | 'tv' = 'movie') {
-    const data = await this.fetchFromProxy(`discover/${type}`, { with_genres: genreId });
-    if (!data || !data.results) return [];
-    return data.results.map((item: any) => this.mapToMovie(item, type));
+    const pages = [1, 2, 3];
+    const results = await Promise.all(pages.map(page => this.fetchFromProxy(`discover/${type}`, { with_genres: genreId, page })));
+    const combined = results.flatMap(data => (data?.results || []));
+    if (combined.length === 0) return [];
+    return combined.map((item: any) => this.mapToMovie(item, type));
   },
 
   async getByProvider(providerIds: string, networkIds: string = '', type: 'movie' | 'tv' = 'movie', region: string = 'IN') {
-    // Try with region and providers first
-    let data = await this.fetchFromProxy(`discover/${type}`, { 
-      with_watch_providers: providerIds, 
-      watch_region: region,
-      sort_by: 'popularity.desc'
-    });
+    const pages = [1, 2, 3];
+    
+    // Attempt to fetch from multiple pages to get 50-60 items
+    const fetchPages = async (pIds: string, nIds: string, rgn: string) => {
+      const results = await Promise.all(pages.map(page => 
+        this.fetchFromProxy(`discover/${type}`, { 
+          with_watch_providers: pIds, 
+          watch_region: rgn,
+          sort_by: 'popularity.desc',
+          page,
+          ...(nIds ? { with_networks: nIds } : {})
+        })
+      ));
+      return results.flatMap(data => (data?.results || []));
+    };
+
+    let combinedResults = await fetchPages(providerIds, '', region);
     
     // Fallback 1: Try with network IDs if provided (often more reliable for "Originals")
-    if ((!data || !data.results || data.results.length < 5) && networkIds) {
+    if ((combinedResults.length < 10) && networkIds) {
       console.log(`[TMDB] Low results for ${providerIds} in ${region}, trying highlights from networks ${networkIds}...`);
-      const networkData = await this.fetchFromProxy(`discover/${type}`, { 
-        with_networks: networkIds,
-        sort_by: 'popularity.desc'
-      });
-      if (networkData && networkData.results && networkData.results.length > 0) {
-        data = networkData;
+      const networkResults = await fetchPages('', networkIds, '');
+      if (networkResults.length > combinedResults.length) {
+        combinedResults = networkResults;
       }
     }
     
     // Fallback 2: Try without region if still low results
-    if (!data || !data.results || data.results.length === 0) {
+    if (combinedResults.length === 0) {
       console.log(`[TMDB] No results for ${providerIds} in ${region}, trying global...`);
-      data = await this.fetchFromProxy(`discover/${type}`, { 
-        with_watch_providers: providerIds,
-        sort_by: 'popularity.desc'
-      });
+      combinedResults = await fetchPages(providerIds, '', '');
     }
 
-    if (!data || !data.results) return [];
-    return data.results.map((item: any) => this.mapToMovie(item, type));
+    const uniqueResults = Array.from(new Map(combinedResults.map(m => [m.id, m])).values());
+    return uniqueResults.map((item: any) => this.mapToMovie(item, type));
   },
 
   async getJioHotstarContent() {
@@ -137,7 +170,7 @@ export const tmdbService = {
         const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
         return r2 - r1;
       })
-      .slice(0, 40);
+      .slice(0, 80);
   },
 
   async getAmazonPrimeContent() {
@@ -153,7 +186,7 @@ export const tmdbService = {
         const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
         return r2 - r1;
       })
-      .slice(0, 40);
+      .slice(0, 80);
   },
 
   async getTVSeasonDetails(tvId: string, seasonNumber: number) {
@@ -177,7 +210,11 @@ export const tmdbService = {
     if (!data) return null;
     
     const movie = this.mapToMovie(data, type);
-    movie.genres = (data.genres || []).map((g: any) => g.name);
+    const rawGenres = (data.genres || []).map((g: any) => g.name);
+    if (rawGenres.includes('Romance') && rawGenres.includes('Comedy')) {
+      if (!rawGenres.includes('RomCom')) rawGenres.push('RomCom');
+    }
+    movie.genres = rawGenres;
     movie.cast = (data.credits?.cast || []).slice(0, 10).map((c: any) => c.name);
     
     // Enrich with Cast Details (Images and Characters)
@@ -222,6 +259,13 @@ export const tmdbService = {
     const trailer = data.videos?.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
     if (trailer) {
       movie.trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
+    }
+
+    // Map recommendations
+    if (data.recommendations && data.recommendations.results) {
+      movie.recommendations = data.recommendations.results
+        .slice(0, 15)
+        .map((item: any) => this.mapToMovie(item, item.media_type || type));
     }
 
     return movie;

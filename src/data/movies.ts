@@ -51,6 +51,8 @@ export interface Movie {
   contentType?: 'movie' | 'tv';
   episodes?: Episode[];
   subtitles?: Subtitle[];
+  recommendations?: Movie[];
+  similar?: Movie[];
 }
 
 export interface UserProgress {
@@ -75,7 +77,7 @@ export const MOVIES: Movie[] = [
     duration: "1 Season",
     year: "2026",
     rating: "8.8",
-    genres: ["Drama"],
+    genres: ["Romance", "Comedy", "Drama", "RomCom"],
     cast: ["Ella Bright", "Belmont Cameli", "Mika Abdalla", "Stephen Kalyn", "Antonio Cipriano"],
     contentType: 'tv',
     episodes: [

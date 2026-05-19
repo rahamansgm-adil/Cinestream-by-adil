@@ -148,13 +148,29 @@ export const Hero = ({ movie, onPlay, onMoreInfo }: HeroProps) => {
         </motion.div>
 
         <motion.h1 
-          className="text-3xl sm:text-4xl md:text-7xl font-bold mb-3 md:mb-4 tracking-tight text-white uppercase leading-tight"
+          className="text-3xl sm:text-4xl md:text-7xl font-bold mb-2 md:mb-3 tracking-tight text-white uppercase leading-tight"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
         >
           {movie.title}
         </motion.h1>
+
+        {movie.genres && movie.genres.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.1 }}
+            className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4 md:mb-6"
+          >
+            {movie.genres.map((genre, idx) => (
+              <span key={idx} className="flex items-center gap-1.5">
+                <span className="text-[10px] md:text-xs font-black uppercase tracking-widest text-white/70">{genre}</span>
+                {idx < movie.genres.length - 1 && <span className="w-1 h-1 bg-netflix-red rounded-full opacity-50" />}
+              </span>
+            ))}
+          </motion.div>
+        )}
         
         <motion.p 
           className="text-sm md:text-lg text-gray-200 mb-6 md:mb-8 line-clamp-2 md:line-clamp-3 leading-relaxed font-light drop-shadow-md max-w-lg mx-auto md:mx-0"

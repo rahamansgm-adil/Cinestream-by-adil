@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Play, Plus, ThumbsUp, Volume2, VolumeX, Trash2, Loader2, Download, ChevronDown, Share2, Info } from 'lucide-react';
+import { X, Play, Plus, ThumbsUp, Volume2, VolumeX, Trash2, Loader2, Download, ChevronDown, Share2, Info, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Movie } from '@/src/data/movies';
 import { User as FirebaseUser } from 'firebase/auth';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, setDoc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
@@ -13,11 +13,12 @@ interface MovieDetailsProps {
   user: FirebaseUser | null;
   onClose: () => void;
   onPlay: (movie: Movie) => void;
+  onMovieClick?: (movie: Movie) => void;
 }
 
 type TabType = 'overview' | 'seasons' | 'similar';
 
-export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps) => {
+export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: MovieDetailsProps) => {
   const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showTrailer, setShowTrailer] = useState(false);
@@ -26,8 +27,32 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [currentEpisodes, setCurrentEpisodes] = useState<any[]>([]);
   const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(false);
+  const [isInList, setIsInList] = useState(false);
+  const [isUpdatingList, setIsUpdatingList] = useState(false);
+  const [showDownloadMessage, setShowDownloadMessage] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showDownloadMessage) {
+      const timer = setTimeout(() => setShowDownloadMessage(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showDownloadMessage]);
+
+  useEffect(() => {
+    if (!user || !movie) {
+      setIsInList(false);
+      return;
+    }
+
+    const listDocId = `${user.uid}_${movie.id}`;
+    const unsubscribe = onSnapshot(doc(db, 'myList', listDocId), (snapshot) => {
+      setIsInList(snapshot.exists());
+    });
+
+    return () => unsubscribe();
+  }, [user, movie]);
 
   useEffect(() => {
     if (!movie) {
@@ -39,6 +64,11 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
 
     setSelectedSeason(1);
     setCurrentEpisodes(movie.episodes || []);
+    
+    // Scroll to top when movie changes
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
     const timer = setTimeout(() => {
       setShowTrailer(true);
@@ -98,6 +128,32 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
     }
   };
 
+  const toggleMyList = async () => {
+    if (!user || !movie || isUpdatingList) return;
+
+    setIsUpdatingList(true);
+    const listDocId = `${user.uid}_${movie.id}`;
+    
+    try {
+      if (isInList) {
+        await deleteDoc(doc(db, 'myList', listDocId));
+      } else {
+        await setDoc(doc(db, 'myList', listDocId), {
+          userId: user.uid,
+          movieId: movie.id,
+          addedAt: serverTimestamp(),
+          title: movie.title,
+          thumbnailUrl: movie.thumbnailUrl,
+          contentType: movie.contentType || 'movie'
+        });
+      }
+    } catch (error) {
+      console.error("Error updating My List:", error);
+    } finally {
+      setIsUpdatingList(false);
+    }
+  };
+
   const isYouTube = movie.trailerUrl?.includes('youtube.com') || movie.trailerUrl?.includes('youtu.be');
   const getYouTubeId = (url: string) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -117,6 +173,22 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
           className="relative w-full h-full md:h-[90vh] md:max-w-4xl bg-zinc-950 md:rounded-2xl overflow-y-auto scrollbar-hide flex flex-col pt-safe"
           ref={scrollRef}
         >
+          <AnimatePresence>
+            {showDownloadMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 50, scale: 0.9 }}
+                className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 bg-zinc-900 border border-white/10 rounded-full shadow-2xl flex items-center gap-3 backdrop-blur-xl"
+              >
+                <div className="p-1.5 bg-netflix-red/20 rounded-full">
+                  <Download size={16} className="text-netflix-red" />
+                </div>
+                <span className="text-xs font-black text-white uppercase tracking-[0.2em]">Offline Viewing Coming Soon</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Top Floating Close Button */}
           <button 
             onClick={onClose}
@@ -207,11 +279,34 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
                       </div>
                       <span className="text-[9px] sm:text-[10px] font-bold text-zinc-500 group-hover:text-zinc-300 uppercase">Share</span>
                    </button>
-                   <button className="flex flex-col items-center gap-1 group shrink-0">
-                      <div className="p-2 sm:p-2.5 rounded-full border border-white/10 group-hover:bg-white/10 transition-all">
-                        <Plus size={18} className="text-zinc-400 group-hover:text-white sm:w-5 sm:h-5" />
+                   <button 
+                    onClick={toggleMyList}
+                    disabled={!user || isUpdatingList}
+                    className={cn(
+                      "flex flex-col items-center gap-1 group shrink-0 transition-all",
+                      !user && "opacity-50 cursor-not-allowed"
+                    )}
+                   >
+                      <div className={cn(
+                        "p-2 sm:p-2.5 rounded-full border transition-all",
+                        isInList 
+                          ? "bg-white border-white" 
+                          : "border-white/10 group-hover:bg-white/10"
+                      )}>
+                        {isUpdatingList ? (
+                          <Loader2 size={18} className="animate-spin text-zinc-400 sm:w-5 sm:h-5" />
+                        ) : isInList ? (
+                          <Check size={18} className="text-black sm:w-5 sm:h-5" />
+                        ) : (
+                          <Plus size={18} className="text-zinc-400 group-hover:text-white sm:w-5 sm:h-5" />
+                        )}
                       </div>
-                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-500 group-hover:text-zinc-300 uppercase">List</span>
+                      <span className={cn(
+                        "text-[9px] sm:text-[10px] font-bold uppercase",
+                        isInList ? "text-white" : "text-zinc-500 group-hover:text-zinc-300"
+                      )}>
+                        {isInList ? 'In List' : 'List'}
+                      </span>
                    </button>
                    <button 
                     onClick={() => onPlay(movie)}
@@ -228,11 +323,14 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
                       </div>
                       <span className="text-[9px] sm:text-[10px] font-bold text-zinc-500 group-hover:text-zinc-300 uppercase">Rate</span>
                    </button>
-                   <button className="flex flex-col items-center gap-1 group shrink-0">
+                   <button 
+                    onClick={() => setShowDownloadMessage(true)}
+                    className="flex flex-col items-center gap-1 group shrink-0"
+                   >
                       <div className="p-2 sm:p-2.5 rounded-full border border-white/10 group-hover:bg-white/10 transition-all">
                         <Download size={18} className="text-zinc-400 group-hover:text-white sm:w-5 sm:h-5" />
                       </div>
-                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-500 group-hover:text-zinc-300 uppercase">Save</span>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-zinc-500 group-hover:text-zinc-300 uppercase">Download</span>
                    </button>
                    {canDelete && (
                       <button 
@@ -420,17 +518,55 @@ export const MovieDetails = ({ movie, user, onClose, onPlay }: MovieDetailsProps
 
                 {activeTab === 'similar' && (
                   <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center justify-center py-40 text-center gap-6"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-12"
                   >
-                     <div className="p-6 rounded-full bg-zinc-900 border border-white/5 shadow-2xl">
-                        <Info size={40} className="text-zinc-600" />
-                     </div>
-                     <div className="space-y-2">
-                        <h4 className="text-xl font-black text-white uppercase tracking-widest">More Like This</h4>
-                        <p className="text-xs text-zinc-500 font-bold max-w-xs">We're tailoring suggestions based on your interests. Coming soon!</p>
-                     </div>
+                    {!movie.recommendations || movie.recommendations.length === 0 ? (
+                      <div className="col-span-full flex flex-col items-center justify-center py-20 text-center gap-6">
+                        <div className="p-6 rounded-full bg-zinc-900 border border-white/5 shadow-2xl">
+                          <Info size={40} className="text-zinc-600" />
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="text-xl font-black text-white uppercase tracking-widest">More Like This</h4>
+                          <p className="text-xs text-zinc-500 font-bold max-w-xs">We're finding more content for you. Check back later!</p>
+                        </div>
+                      </div>
+                    ) : (
+                      movie.recommendations.map((m, idx) => (
+                        <motion.div
+                          key={m.id}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: idx * 0.05 }}
+                          onClick={() => onMovieClick?.(m)}
+                          className="group relative cursor-pointer"
+                        >
+                          <div className="relative aspect-video rounded-lg overflow-hidden border border-white/5 shadow-md">
+                            <img 
+                              src={m.bannerUrl || m.thumbnailUrl} 
+                              className="w-full h-full object-cover group-hover:scale-110 transition-all duration-500" 
+                              alt={m.title}
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                              <Play size={24} fill="white" className="text-white" />
+                            </div>
+                            <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center z-20">
+                              <span className="text-[10px] font-black text-white px-1.5 py-0.5 bg-black/60 rounded shadow-sm">
+                                {m.year}
+                              </span>
+                              <span className="text-[10px] font-black text-green-500 px-1.5 py-0.5 bg-black/60 rounded shadow-sm">
+                                {m.rating} Rating
+                              </span>
+                            </div>
+                          </div>
+                          <h5 className="mt-2 text-[11px] font-black text-zinc-400 uppercase tracking-tighter truncate group-hover:text-white transition-colors">
+                            {m.title}
+                          </h5>
+                        </motion.div>
+                      ))
+                    )}
                   </motion.div>
                 )}
              </div>
