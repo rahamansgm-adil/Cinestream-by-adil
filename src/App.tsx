@@ -276,7 +276,7 @@ export default function App() {
       console.log("[App] Starting initial catalog fetch...");
       try {
         const [
-          trending, popular, netflix, latest, topRated, 
+          trendingData, popular, netflix, latest, topRated, 
           jioHotstar, primeVideo,
           actionMovies, actionTV,
           comedyMovies, comedyTV,
@@ -298,10 +298,21 @@ export default function App() {
           tmdbService.getByGenre(10749, 'movie'), tmdbService.getByGenre(10749, 'tv'), // Romance
           tmdbService.getByGenre(10752, 'movie'), tmdbService.getByGenre(10768, 'tv')  // War
         ]);
+
+        // Enrich the top 10 trending movies with details (to get logos for the Hero)
+        let enrichedTrending = trendingData || [];
+        if (enrichedTrending.length > 0) {
+          const top10 = enrichedTrending.slice(0, 10);
+          const enriched = await Promise.all(
+            top10.map(m => tmdbService.getMovieDetails(m.id, m.contentType))
+          );
+          const validEnriched = enriched.filter(Boolean) as Movie[];
+          enrichedTrending = [...validEnriched, ...enrichedTrending.slice(10)];
+        }
         
         setTmdbMovies(prev => ({
           ...prev,
-          trending: trending || [],
+          trending: enrichedTrending || [],
           popular: popular || [],
           netflix: netflix || [],
           latest: latest || [],

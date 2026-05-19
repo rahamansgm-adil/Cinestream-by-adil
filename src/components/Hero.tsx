@@ -183,14 +183,30 @@ export const Hero = ({ movies, onPlay, onMoreInfo }: HeroProps) => {
                 <span className="text-gray-400 text-xs md:text-sm font-bold tracking-widest">{movie.year}</span>
               </motion.div>
 
-              <motion.h1 
-                className="text-3xl sm:text-4xl md:text-7xl font-bold mb-2 md:mb-3 tracking-tight text-white uppercase leading-tight"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, delay: 0.4 }}
-              >
-                {movie.title}
-              </motion.h1>
+              {movie.logoUrl ? (
+                <motion.div
+                  initial={{ opacity: 0, x: -20, scale: 0.8 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                  className="mb-4 flex justify-center md:justify-start"
+                >
+                  <img 
+                    src={movie.logoUrl} 
+                    alt={movie.title} 
+                    className="max-w-[80vw] md:max-w-xl max-h-[120px] md:max-h-[180px] object-contain drop-shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+                    referrerPolicy="no-referrer"
+                  />
+                </motion.div>
+              ) : (
+                <motion.h1 
+                  className="text-3xl sm:text-4xl md:text-7xl font-bold mb-2 md:mb-3 tracking-tight text-white uppercase leading-tight"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                >
+                  {movie.title}
+                </motion.h1>
+              )}
 
               {movie.genres && movie.genres.length > 0 && (
                 <motion.div 

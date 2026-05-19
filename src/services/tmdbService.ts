@@ -219,10 +219,19 @@ export const tmdbService = {
   },
 
   async getMovieDetails(id: string, type: 'movie' | 'tv' = 'movie') {
-    const data = await this.fetchFromProxy(`${type}/${id}`, { append_to_response: 'credits,videos,recommendations' });
+    const data = await this.fetchFromProxy(`${type}/${id}`, { append_to_response: 'credits,videos,recommendations,images', include_image_language: 'en,null' });
     if (!data) return null;
     
     const movie = this.mapToMovie(data, type);
+    
+    // Extract Logo
+    if (data.images && data.images.logos && data.images.logos.length > 0) {
+      // Prefer English logo
+      const englishLogo = data.images.logos.find((l: any) => l.iso_639_1 === 'en');
+      const logo = englishLogo || data.images.logos[0];
+      movie.logoUrl = `https://image.tmdb.org/t/p/original${logo.file_path}`;
+    }
+
     let rawGenres = (data.genres || []).map((g: any) => g.name);
     if (rawGenres.includes('Romance') && rawGenres.includes('Comedy')) {
       if (!rawGenres.includes('RomCom')) rawGenres.push('RomCom');

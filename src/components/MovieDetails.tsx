@@ -321,14 +321,30 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
                       {movie.contentType === 'tv' ? 'Series' : 'Movie'}
                    </span>
                 </motion.div>
-                <motion.h1 
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-4xl md:text-6xl font-black text-white tracking-tighter uppercase mb-4"
-                >
-                  {movie.title}
-                </motion.h1>
+                {movie.logoUrl ? (
+                  <motion.div
+                    initial={{ y: 20, opacity: 0, scale: 0.8 }}
+                    animate={{ y: 0, opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="mb-6 flex justify-center"
+                  >
+                    <img 
+                      src={movie.logoUrl} 
+                      alt={movie.title} 
+                      className="max-w-[85%] max-h-[120px] md:max-h-[180px] object-contain drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]"
+                      referrerPolicy="no-referrer"
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.h1 
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="text-4xl md:text-6xl font-black text-white tracking-tighter uppercase mb-4"
+                  >
+                    {movie.title}
+                  </motion.h1>
+                )}
                 <div className="flex gap-2 mb-6 flex-wrap justify-center">
                    {movie.genres.slice(0, 3).map((genre) => (
                       <span key={genre} className="px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-widest text-zinc-300 border border-white/5">
