@@ -3,7 +3,7 @@ import { X, Play, Plus, ThumbsUp, Volume2, VolumeX, Trash2, Loader2, Download, C
 import { motion, AnimatePresence } from 'motion/react';
 import { Movie } from '@/src/data/movies';
 import { User as FirebaseUser } from 'firebase/auth';
-import { doc, deleteDoc, setDoc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, deleteDoc, setDoc, serverTimestamp, getDoc, onSnapshot, query, collection, where } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
@@ -152,6 +152,72 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
     } finally {
       setIsUpdatingList(false);
     }
+  };
+
+  const [allProgress, setAllProgress] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (!user || !movie) return;
+
+    // Fetch all progress for this movie (including episodes)
+    const progressQuery = query(
+      collection(db, 'userProgress'),
+      where('userId', '==', user.uid),
+      where('movieId', '==', movie.id)
+    );
+
+    const unsubscribe = onSnapshot(progressQuery, (snapshot) => {
+      const progressMap: Record<string, any> = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.episodeId) {
+          progressMap[data.episodeId] = data;
+        } else {
+          progressMap['main'] = data;
+        }
+      });
+      setAllProgress(progressMap);
+    });
+
+    return () => unsubscribe();
+  }, [user, movie]);
+
+  const lastProgress = allProgress['main'] || Object.values(allProgress).sort((a, b) => (b.lastWatched?.seconds || 0) - (a.lastWatched?.seconds || 0))[0];
+
+  const handlePlayMain = () => {
+    if (movie.contentType === 'tv' && lastProgress?.videoUrl) {
+      // Find the episode if possible (checking all seasons would be better but we check currentEpisodes)
+      const ep = currentEpisodes.find(e => e.videoUrl === lastProgress.videoUrl);
+      onPlay({
+        ...movie,
+        videoUrl: lastProgress.videoUrl,
+        title: ep ? `${movie.title} - S${ep.seasonNumber}:E${ep.number} ${ep.title}` : movie.title,
+        currentEpisode: ep || { id: lastProgress.episodeId, title: lastProgress.episodeTitle }
+      } as any);
+    } else {
+      onPlay(movie);
+    }
+  };
+
+  const formatMinutesLeft = (progress: number, duration: number, data?: any) => {
+    if (!duration || duration <= 0) return null;
+    const left = duration - progress;
+    const mins = Math.floor(left / 60);
+    const percent = (progress / duration) * 100;
+    
+    let timeStr = '';
+    if (percent > 95) timeStr = 'Finished';
+    else if (mins <= 0) timeStr = 'Just started';
+    else timeStr = `${mins}m left`;
+
+    if (data?.contentType === 'tv' && data?.episodeNumber !== undefined && data?.episodeNumber !== null) {
+      const s = data.seasonNumber ?? 1;
+      const e = data.episodeNumber;
+      const title = data.episodeTitle ? `: ${data.episodeTitle}` : '';
+      return `S${s}E${e}${title} - ${timeStr}`;
+    }
+
+    return timeStr;
   };
 
   const isYouTube = movie.trailerUrl?.includes('youtube.com') || movie.trailerUrl?.includes('youtu.be');
@@ -309,13 +375,15 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
                       </span>
                    </button>
                    <button 
-                    onClick={() => onPlay(movie)}
+                    onClick={handlePlayMain}
                     className="flex flex-col items-center gap-1 group shrink-0"
                    >
                       <div className="p-3 sm:p-4 rounded-full bg-netflix-red shadow-lg shadow-netflix-red/40 group-hover:scale-110 active:scale-95 transition-all duration-300">
                         <Play size={22} fill="white" className="text-white translate-x-0.5 sm:w-6 sm:h-6" />
                       </div>
-                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-[0.2em] mt-1 shadow-sm">Play</span>
+                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-[0.2em] mt-1 shadow-sm">
+                        {lastProgress && lastProgress.progress > 5 ? 'Resume' : 'Play'}
+                      </span>
                    </button>
                    <button className="flex flex-col items-center gap-1 group shrink-0">
                       <div className="p-2 sm:p-2.5 rounded-full border border-white/10 group-hover:bg-white/10 transition-all">
@@ -348,6 +416,17 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
              </div>
           </div>
 
+          {/* Main Progress Bar (Hero) */}
+          {lastProgress && lastProgress.duration > 0 && (
+             <div className="relative h-1.5 bg-zinc-900 border-t border-white/5 overflow-hidden z-30">
+               <motion.div 
+                 initial={{ width: 0 }}
+                 animate={{ width: `${(lastProgress.progress / lastProgress.duration) * 100}%` }}
+                 className="h-full bg-netflix-red shadow-[0_0_10px_rgba(229,9,20,0.4)]"
+               />
+             </div>
+           )}
+
           {/* Main Content Area */}
           <div className="flex-1 bg-zinc-950 px-6 py-6 space-y-8 pb-32">
              {/* Metadata Row */}
@@ -356,6 +435,11 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
                 <span className="text-zinc-400">{movie.year}</span>
                 <span className="bg-zinc-800 text-zinc-100 px-1.5 py-0.5 rounded text-[11px] border border-white/5">{movie.rating}</span>
                 <span className="text-zinc-400">{movie.duration}</span>
+                {lastProgress && lastProgress.duration > 0 && (
+                  <span className="text-netflix-red font-black uppercase tracking-tighter">
+                    {formatMinutesLeft(lastProgress.progress, lastProgress.duration, lastProgress)}
+                  </span>
+                )}
                 <span className="text-[10px] border border-zinc-700 px-1.5 py-0.5 rounded tracking-tighter text-zinc-500">Ultra HD 4K</span>
              </div>
 
@@ -488,28 +572,43 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
                             onClick={() => onPlay({
                               ...movie,
                               videoUrl: ep.videoUrl,
-                              title: `${movie.title} - S${ep.seasonNumber}:E${ep.number} ${ep.title}`
-                            })}
-                            className="group flex gap-4 p-3 rounded-2xl bg-zinc-900/20 hover:bg-zinc-900/60 border border-transparent hover:border-white/5 transition-all cursor-pointer shadow-lg"
-                           >
-                              <div className="relative w-32 aspect-video rounded-xl overflow-hidden shrink-0 shadow-lg border border-white/5">
-                                 <img src={ep.thumbnailUrl || movie.thumbnailUrl || undefined} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-500" alt={ep.title} referrerPolicy="no-referrer" />
-                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-2xl">
-                                      <Play size={16} fill="black" className="text-black translate-x-0.5" />
-                                    </div>
+                              title: `${movie.title} - S${ep.seasonNumber}:E${ep.number} ${ep.title}`,
+                              currentEpisode: ep
+                            } as any)}
+                             className="group flex flex-col gap-3 p-3 rounded-2xl bg-zinc-900/20 hover:bg-zinc-900/60 border border-transparent hover:border-white/5 transition-all cursor-pointer shadow-lg"
+                            >
+                               <div className="flex gap-4">
+                                  <div className="relative w-32 aspect-video rounded-xl overflow-hidden shrink-0 shadow-lg border border-white/5">
+                                     <img src={ep.thumbnailUrl || movie.thumbnailUrl || undefined} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-500" alt={ep.title} referrerPolicy="no-referrer" />
+                                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-2xl">
+                                          <Play size={16} fill="black" className="text-black translate-x-0.5" />
+                                        </div>
+                                     </div>
+                                  </div>
+                                  <div className="flex-1 min-w-0 space-y-1 pt-1">
+                                     <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-white uppercase tracking-tight truncate group-hover:text-netflix-red transition-colors">{ep.number}. {ep.title}</h4>
+                                        <span className="text-[10px] text-zinc-600 font-bold shrink-0">{ep.duration}</span>
+                                     </div>
+                                     <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed italic">
+                                        {ep.description || `Chapter ${ep.number} of Season ${ep.seasonNumber}.`}
+                                     </p>
+                                  </div>
+                               </div>
+                               
+                               {/* Episode Progress Bar */}
+                               {allProgress[ep.id] && allProgress[ep.id].duration > 0 && (
+                                 <div className="px-1">
+                                   <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                                     <div 
+                                       className="h-full bg-netflix-red" 
+                                       style={{ width: `${(allProgress[ep.id].progress / allProgress[ep.id].duration) * 100}%` }}
+                                     />
+                                   </div>
                                  </div>
-                              </div>
-                              <div className="flex-1 min-w-0 space-y-1 pt-1">
-                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-black text-white uppercase tracking-tight truncate group-hover:text-netflix-red transition-colors">{ep.number}. {ep.title}</h4>
-                                    <span className="text-[10px] text-zinc-600 font-bold shrink-0">{ep.duration}</span>
-                                 </div>
-                                 <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed italic">
-                                    {ep.description || `Chapter ${ep.number} of Season ${ep.seasonNumber}.`}
-                                 </p>
-                              </div>
-                           </motion.div>
+                               )}
+                            </motion.div>
                         ))}
                       </div>
                     )}

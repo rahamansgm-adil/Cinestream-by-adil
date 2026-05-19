@@ -37,14 +37,20 @@ export const tmdbService = {
     10765: 'Sci-Fi & Fantasy', 10766: 'Soap', 10767: 'Talk', 10768: 'War & Politics'
   },
 
+  uniqueById<T extends { id: string }>(items: T[]): T[] {
+    return Array.from(new Map(items.map(item => [item.id, item])).values());
+  },
+
   mapToMovie(tmdbItem: any, type: 'movie' | 'tv' = 'movie'): Movie {
     const isTV = type === 'tv';
-    const genres = (tmdbItem.genre_ids || []).map((id: number) => (this as any).genreMap[id]).filter(Boolean);
+    let genres = (tmdbItem.genre_ids || []).map((id: number) => (this as any).genreMap[id]).filter(Boolean);
     
     // Check for RomCom
     if (genres.includes('Romance') && genres.includes('Comedy')) {
       genres.push('RomCom');
     }
+
+    genres = Array.from(new Set(genres));
 
     return {
       id: String(tmdbItem.id),
@@ -67,7 +73,8 @@ export const tmdbService = {
     const results = await Promise.all(pages.map(page => this.fetchFromProxy(`trending/${type}/week`, { page })));
     const combined = results.flatMap(data => (data?.results || []));
     if (combined.length === 0) return [];
-    return combined.map((item: any) => this.mapToMovie(item, item.media_type || (type === 'all' ? 'movie' : type)));
+    const movies = combined.map((item: any) => this.mapToMovie(item, item.media_type || (type === 'all' ? 'movie' : type)));
+    return this.uniqueById(movies);
   },
 
   async getPopular(type: 'movie' | 'tv' = 'movie') {
@@ -75,15 +82,17 @@ export const tmdbService = {
     const results = await Promise.all(pages.map(page => this.fetchFromProxy(`${type}/popular`, { page })));
     const combined = results.flatMap(data => (data?.results || []));
     if (combined.length === 0) return [];
-    return combined.map((item: any) => this.mapToMovie(item, type));
+    const movies = combined.map((item: any) => this.mapToMovie(item, type));
+    return this.uniqueById(movies);
   },
 
   async search(query: string) {
     const data = await this.fetchFromProxy('search/multi', { query });
     if (!data || !data.results) return [];
-    return data.results
+    const movies = data.results
       .filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv')
       .map((item: any) => this.mapToMovie(item, item.media_type));
+    return this.uniqueById(movies);
   },
 
   async getNetflixOriginals() {
@@ -92,7 +101,8 @@ export const tmdbService = {
     const results = await Promise.all(pages.map(page => this.fetchFromProxy('discover/tv', { with_networks: 213, sort_by: 'popularity.desc', page })));
     const combined = results.flatMap(data => (data?.results || []));
     if (combined.length === 0) return [];
-    return combined.map((item: any) => this.mapToMovie(item, 'tv'));
+    const movies = combined.map((item: any) => this.mapToMovie(item, 'tv'));
+    return this.uniqueById(movies);
   },
 
   async getLatestRelease() {
@@ -100,7 +110,8 @@ export const tmdbService = {
     const results = await Promise.all(pages.map(page => this.fetchFromProxy('movie/now_playing', { page })));
     const combined = results.flatMap(data => (data?.results || []));
     if (combined.length === 0) return [];
-    return combined.map((item: any) => this.mapToMovie(item, 'movie'));
+    const movies = combined.map((item: any) => this.mapToMovie(item, 'movie'));
+    return this.uniqueById(movies);
   },
 
   async getTopRated(type: 'movie' | 'tv' = 'movie') {
@@ -108,7 +119,8 @@ export const tmdbService = {
     const results = await Promise.all(pages.map(page => this.fetchFromProxy(`${type}/top_rated`, { page })));
     const combined = results.flatMap(data => (data?.results || []));
     if (combined.length === 0) return [];
-    return combined.map((item: any) => this.mapToMovie(item, type));
+    const movies = combined.map((item: any) => this.mapToMovie(item, type));
+    return this.uniqueById(movies);
   },
 
   async getByGenre(genreId: number, type: 'movie' | 'tv' = 'movie') {
@@ -116,7 +128,8 @@ export const tmdbService = {
     const results = await Promise.all(pages.map(page => this.fetchFromProxy(`discover/${type}`, { with_genres: genreId, page })));
     const combined = results.flatMap(data => (data?.results || []));
     if (combined.length === 0) return [];
-    return combined.map((item: any) => this.mapToMovie(item, type));
+    const movies = combined.map((item: any) => this.mapToMovie(item, type));
+    return this.uniqueById(movies);
   },
 
   async getByProvider(providerIds: string, networkIds: string = '', type: 'movie' | 'tv' = 'movie', region: string = 'IN') {
@@ -164,7 +177,7 @@ export const tmdbService = {
     const tv = await this.getByProvider('122|220|337', '2739|4474', 'tv');
     
     const combined = [...movies, ...tv];
-    return combined
+    return this.uniqueById(combined)
       .sort((a, b) => {
         const r1 = a.rating === 'NR' ? 0 : parseFloat(a.rating);
         const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
@@ -180,7 +193,7 @@ export const tmdbService = {
     const tv = await this.getByProvider('119|9', '1024', 'tv');
     
     const combined = [...movies, ...tv];
-    return combined
+    return this.uniqueById(combined)
       .sort((a, b) => {
         const r1 = a.rating === 'NR' ? 0 : parseFloat(a.rating);
         const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
@@ -210,11 +223,11 @@ export const tmdbService = {
     if (!data) return null;
     
     const movie = this.mapToMovie(data, type);
-    const rawGenres = (data.genres || []).map((g: any) => g.name);
+    let rawGenres = (data.genres || []).map((g: any) => g.name);
     if (rawGenres.includes('Romance') && rawGenres.includes('Comedy')) {
       if (!rawGenres.includes('RomCom')) rawGenres.push('RomCom');
     }
-    movie.genres = rawGenres;
+    movie.genres = Array.from(new Set(rawGenres));
     movie.cast = (data.credits?.cast || []).slice(0, 10).map((c: any) => c.name);
     
     // Enrich with Cast Details (Images and Characters)
@@ -263,9 +276,10 @@ export const tmdbService = {
 
     // Map recommendations
     if (data.recommendations && data.recommendations.results) {
-      movie.recommendations = data.recommendations.results
+      const recommendations = data.recommendations.results
         .slice(0, 15)
         .map((item: any) => this.mapToMovie(item, item.media_type || type));
+      movie.recommendations = this.uniqueById(recommendations);
     }
 
     return movie;

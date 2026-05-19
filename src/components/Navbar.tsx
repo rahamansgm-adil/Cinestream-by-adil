@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, User, Menu, LogOut, LogIn, X, Settings, Plus } from 'lucide-react';
+import { Search, Bell, User, Menu, LogOut, LogIn, X, Settings, Plus, Clapperboard } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { User as FirebaseUser } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
@@ -55,10 +55,15 @@ export const Navbar = ({
       <div className="flex items-center gap-4 md:gap-10 overflow-hidden">
         <div 
           onClick={() => onCategoryChange('all')}
-          className="text-netflix-red text-xl md:text-2xl font-black tracking-tighter cursor-pointer whitespace-nowrap hover:scale-105 transition-transform shrink-0"
+          className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform shrink-0 group"
         >
-          <span className="hidden sm:inline">CINESTREAM BY ADIL</span>
-          <span className="sm:hidden">CINESTREAM</span>
+          <div className="p-1 sm:p-1.5 bg-gradient-to-br from-netflix-red to-[#ff0a16] rounded shadow-lg shadow-netflix-red/30 flex items-center justify-center transform group-hover:rotate-12 transition-transform">
+            <Clapperboard size={18} className="text-white sm:w-5 sm:h-5" strokeWidth={3} />
+          </div>
+          <div className="text-netflix-red text-xl md:text-2xl font-black tracking-tighter whitespace-nowrap">
+            <span className="hidden sm:inline font-black uppercase tracking-tighter">CineStream By Adil</span>
+            <span className="sm:hidden font-black uppercase tracking-tighter">CineStream</span>
+          </div>
         </div>
         
         <ul className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-200">

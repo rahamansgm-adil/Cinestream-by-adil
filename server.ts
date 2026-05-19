@@ -25,21 +25,27 @@ try {
 }
 
 // Initialize Firebase Admin
-let adminApp;
-if (getApps().length === 0) {
-  adminApp = initializeApp({
-    projectId: firebaseConfig.projectId || "gen-lang-client-0142261778"
-  });
-} else {
-  adminApp = getApps()[0];
+let adminApp: any;
+let adminDb: any;
+let adminAuth: any;
+
+try {
+  if (getApps().length === 0) {
+    adminApp = initializeApp({
+      projectId: firebaseConfig.projectId || "gen-lang-client-0142261778"
+    });
+  } else {
+    adminApp = getApps()[0];
+  }
+  
+  // Target specific database if possible, otherwise use default
+  const DB_ID = firebaseConfig.firestoreDatabaseId || "ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281";
+  adminDb = getFirestore(adminApp, DB_ID);
+  adminAuth = getAdminAuth(adminApp);
+  console.log(`[Admin] Init with DB ID: ${DB_ID}`);
+} catch (err) {
+  console.error("[Admin] Firebase Admin initialization failed:", err);
 }
-
-// Target specific database if possible, otherwise use default
-const DB_ID = firebaseConfig.firestoreDatabaseId || "ai-studio-e0e42522-df9a-41a3-aa8c-a2951e43c281";
-let adminDb = getFirestore(adminApp, DB_ID);
-const adminAuth = getAdminAuth(adminApp);
-
-console.log(`[Admin] Init with DB ID: ${DB_ID}`);
 
 // Middleware to verify Firebase ID Token (Bypass for owner)
 const verifyAdminToken = async (req: any, res: any, next: any) => {
@@ -381,6 +387,21 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+    
+    // Explicitly handle index.html for SPA fallback in dev
+    app.use("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith('/api')) return next();
+      
+      try {
+        let template = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
@@ -390,10 +411,14 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    fs.writeFileSync(path.join(process.cwd(), 'server_heartbeat.txt'), `Started at ${new Date().toISOString()}`);
+    console.log(`[Server] CINEMATIC STREAMING SERVER STARTED`);
+    console.log(`[Server] Running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] Mode: ${process.env.NODE_ENV || 'development'}`);
   });
 }
 
+console.log("[Server] Attempting to start Cinnamon server...");
 startServer().catch((err) => {
   console.error("Critical server failure:", err);
   process.exit(1);

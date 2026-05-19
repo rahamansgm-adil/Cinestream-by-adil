@@ -45,26 +45,109 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<'all' | 'tv' | 'movie' | 'live' | 'my-list'>('all');
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const progressRef = useRef<UserProgress[]>([]);
+  const [progressMovies, setProgressMovies] = useState<Movie[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+  const [tmdbError, setTmdbError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [playingMovie, setPlayingMovie] = useState<Movie | null>(null);
+  const playingMovieRef = useRef<Movie | null>(null);
+
+  useEffect(() => {
+    playingMovieRef.current = playingMovie;
+  }, [playingMovie]);
+
+  // Message listener for external players (Vidking)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!playingMovieRef.current || !user) return;
+      
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        console.log("[App] Player Message:", data);
+
+        // Standard progress message format (Vidking/Common players)
+        // We look for time (currentTime) and duration
+        const currentTime = data.currentTime || data.time || (data.data?.time);
+        const duration = data.duration || (data.data?.duration);
+
+        if (currentTime !== undefined && duration !== undefined) {
+          const currentMovie = playingMovieRef.current;
+          const currentEp = (currentMovie as any).currentEpisode;
+          
+          // Unique ID per movie/episode to track individual progress
+          const progressId = currentEp?.id 
+            ? `${user.uid}_${currentMovie.id}_${currentEp.id}` 
+            : `${user.uid}_${currentMovie.id}`;
+
+          setDoc(doc(db, 'userProgress', progressId), {
+            movieId: currentMovie.id,
+            userId: user.uid,
+            progress: currentTime,
+            duration: duration,
+            lastWatched: serverTimestamp(),
+            contentType: currentMovie.contentType || 'movie',
+            episodeId: currentEp?.id || null,
+            episodeNumber: currentEp?.number || null,
+            seasonNumber: currentEp?.seasonNumber || null,
+            videoUrl: currentMovie.videoUrl,
+            episodeTitle: currentEp?.title || null
+          }, { merge: true }).catch(err => console.error("Error saving external progress:", err));
+        }
+      } catch (err) {
+        // Skip messages that aren't valid JSON
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [user]);
+
+  const [activeAddForm, setActiveAddForm] = useState<'movie' | 'tv' | null>(null);
+  const [showUserLogin, setShowUserLogin] = useState(false);
+  const [myListIds, setMyListIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     progressRef.current = userProgress;
   }, [userProgress]);
 
-  const [playingMovie, setPlayingMovie] = useState<Movie | null>(null);
-  const [activeAddForm, setActiveAddForm] = useState<'movie' | 'tv' | null>(null);
-  const [showUserLogin, setShowUserLogin] = useState(false);
-  const [tmdbError, setTmdbError] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [myListIds, setMyListIds] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const { isAdmin } = useAuth();
+  useEffect(() => {
+    // Fetch missing movies for Continue Watching
+    const fetchMissing = async () => {
+      if (!user || userProgress.length === 0) return;
+      
+      const existingIds = new Set([
+        ...dbMovies.map(m => m.id),
+        ...movies.map(m => m.id),
+        ...Object.values(tmdbMovies).flat().map(m => m.id),
+        ...progressMovies.map(m => m.id)
+      ]);
+      
+      const missing = userProgress.filter(p => !existingIds.has(p.movieId));
+      
+      if (missing.length > 0) {
+        console.log(`[App] Fetching ${missing.length} missing movies from progress...`);
+        const fetched = await Promise.all(
+          missing.map(p => tmdbService.getMovieDetails(p.movieId, p.contentType))
+        );
+        const validFetched = fetched.filter(Boolean) as Movie[];
+        if (validFetched.length > 0) {
+          setProgressMovies(prev => [...prev, ...validFetched]);
+        }
+      }
+    };
+    
+    fetchMissing();
+  }, [userProgress, user, dbMovies, movies, tmdbMovies]);
+
 
   // Combined and filtered movies
   const allMovies = useMemo(() => {
     const combined = [
       ...dbMovies, 
       ...movies, 
+      ...progressMovies, // Include movies fetched from progress
       ...tmdbMovies.trending, 
       ...tmdbMovies.popular, 
       ...tmdbMovies.netflix,
@@ -77,7 +160,9 @@ export default function App() {
       ...tmdbMovies.drama,
       ...tmdbMovies.romance,
       ...tmdbMovies.war
-    ];
+    ].filter(Boolean); // Safety check
+    
+    // Use a Map to ensure unique by ID
     const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
     
     let filtered = unique;
@@ -166,9 +251,9 @@ export default function App() {
       unsubscribeMyList = onSnapshot(myListQuery, (snapshot) => {
         const items = snapshot.docs.map(doc => doc.data());
         // Sort by addedAt desc client-side
-        const sortedIds = items
+        const sortedIds = Array.from(new Set(items
           .sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0))
-          .map(item => item.movieId as string);
+          .map(item => item.movieId as string)));
         setMyListIds(sortedIds);
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, 'myList');
@@ -223,11 +308,11 @@ export default function App() {
           topRated: topRated || [],
           jioHotstar: jioHotstar || [],
           primeVideo: primeVideo || [],
-          action: [...(actionMovies || []), ...(actionTV || [])],
-          comedy: [...(comedyMovies || []), ...(comedyTV || [])],
-          drama: [...(dramaMovies || []), ...(dramaTV || [])],
-          romance: [...(romanceMovies || []), ...(romanceTV || [])],
-          war: [...(warMovies || []), ...(warTV || [])]
+          action: tmdbService.uniqueById([...(actionMovies || []), ...(actionTV || [])]),
+          comedy: tmdbService.uniqueById([...(comedyMovies || []), ...(comedyTV || [])]),
+          drama: tmdbService.uniqueById([...(dramaMovies || []), ...(dramaTV || [])]),
+          romance: tmdbService.uniqueById([...(romanceMovies || []), ...(romanceTV || [])]),
+          war: tmdbService.uniqueById([...(warMovies || []), ...(warTV || [])])
         }));
       } catch (err: any) {
         console.error("[App] Failed to fetch initial catalog:", err);
@@ -259,17 +344,29 @@ export default function App() {
   const continueWatchingMovies = useMemo(() => {
     if (!user || userProgress.length === 0) return [];
     
-    return userProgress.map(progress => {
-      const movie = allMovies.find(m => m.id === progress.movieId);
-      if (!movie) return null;
+    const movies = userProgress.map(progress => {
+      // First check in all current lists
+      let movie = allMovies.find(m => m.id === progress.movieId);
+      
+      // If not found, create a placeholder from progress data until full details load
+      // This ensures the row doesn't disappear if the movie isn't in the current trending/popular lists
+      if (!movie) {
+        // We might want to fetch it explicitly, but for now we can at least show what we have
+        return null; 
+      }
       
       return {
         ...movie,
+        // Override with progress specific data
+        videoUrl: (progress as any).videoUrl || movie.videoUrl,
         progress: progress.progress,
         totalDuration: progress.duration,
-        progressId: progress.id
+        progressId: progress.id,
+        currentEpisodeId: (progress as any).episodeId
       };
-    }).filter(Boolean) as (Movie & { progress: number; totalDuration: number; progressId: string })[];
+    }).filter(Boolean) as (Movie & { progress: number; totalDuration: number; progressId: string; currentEpisodeId?: string })[];
+
+    return Array.from(new Map(movies.map(m => [m.id, m])).values());
   }, [allMovies, userProgress, user]);
 
   const myListMovies = useMemo(() => {
@@ -277,7 +374,14 @@ export default function App() {
     return myListIds.map(id => allMovies.find(m => m.id === id)).filter(Boolean) as Movie[];
   }, [allMovies, myListIds, user]);
 
-  const featuredMovie = allMovies[0];
+  const featuredMovies = useMemo(() => {
+    const trending = tmdbMovies.trending.slice(0, 10);
+    // If trending is empty (e.g. API loading or failed), fallback to initial movies
+    if (trending.length === 0) {
+      return movies.slice(0, 10);
+    }
+    return trending;
+  }, [tmdbMovies.trending, movies]);
 
   const filterMovies = useCallback((list: Movie[]) => {
     if (activeCategory === 'all') return list;
@@ -316,8 +420,14 @@ export default function App() {
     if (playingMovie && user) {
       // Find existing progress from ref to avoid dependency cycle
       const existingProgress = progressRef.current.find(p => p.movieId === playingMovie.id);
+      
+      // If it's a TV show, check if the episode matches too (or just resume if it's the right URL)
       if (existingProgress && existingProgress.progress > 5) {
-         player.currentTime(existingProgress.progress);
+         // Only resume if the playing URL matches the saved one OR if it's a single movie
+         const isSameVideo = !(existingProgress as any).videoUrl || (existingProgress as any).videoUrl === playingMovie.videoUrl;
+         if (isSameVideo) {
+            player.currentTime(existingProgress.progress);
+         }
       }
 
       let lastSavedTime = 0;
@@ -325,11 +435,15 @@ export default function App() {
         const currentTime = player.currentTime();
         const duration = player.duration();
         
-        // Save every 10 seconds or if substantial change
-        if (currentTime - lastSavedTime > 10 || Math.abs(currentTime - lastSavedTime) > 10) {
+        // Save every 5 seconds or if substantial change
+        if (currentTime - lastSavedTime > 5 || Math.abs(currentTime - lastSavedTime) > 5) {
           lastSavedTime = currentTime;
           
-          const progressId = `${user.uid}_${playingMovie.id}`;
+          const currentEp = (playingMovie as any).currentEpisode;
+          const progressId = currentEp?.id 
+            ? `${user.uid}_${playingMovie.id}_${currentEp.id}` 
+            : `${user.uid}_${playingMovie.id}`;
+
           setDoc(doc(db, 'userProgress', progressId), {
             movieId: playingMovie.id,
             userId: user.uid,
@@ -337,7 +451,11 @@ export default function App() {
             duration: duration,
             lastWatched: serverTimestamp(),
             contentType: playingMovie.contentType || 'movie',
-            episodeId: playingMovie.contentType === 'tv' ? playingMovie.id : null
+            episodeId: currentEp?.id || null,
+            episodeNumber: currentEp?.number || null,
+            seasonNumber: currentEp?.seasonNumber || null,
+            videoUrl: playingMovie.videoUrl,
+            episodeTitle: currentEp?.title || null
           }, { merge: true }).catch(err => console.error("Error saving progress:", err));
         }
       });
@@ -495,15 +613,15 @@ export default function App() {
               </div>
             ) : (
               <>
-                {featuredMovie && (
+                {featuredMovies.length > 0 && (
                   <Hero 
-                    movie={featuredMovie} 
+                    movies={featuredMovies} 
                     onPlay={handlePlay} 
                     onMoreInfo={handleMovieSelect} 
                   />
                 )}
         
-                <div className={cn("relative z-10 pb-20", !featuredMovie && "pt-32")}>
+                <div className={cn("relative z-10 pb-20", featuredMovies.length === 0 && "pt-32")}>
                   {myListMovies.length > 0 && (
                     <MovieRow 
                       key="my-list-row"
@@ -586,47 +704,47 @@ export default function App() {
                   )}
     
                   {/* Genre Based Rows */}
-                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('romcom') || (g.toLowerCase().includes('romance') && g.toLowerCase().includes('comedy'))))).length > 0 && (
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && (g.toLowerCase().includes('romcom') || (g.toLowerCase().includes('romance') && g.toLowerCase().includes('comedy')))))).length > 0 && (
                     <MovieRow 
                       key="genre-romcom"
                       title="RomComs"
-                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('romcom') || (g.toLowerCase().includes('romance') && g.toLowerCase().includes('comedy')))))}
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && (g.toLowerCase().includes('romcom') || (g.toLowerCase().includes('romance') && g.toLowerCase().includes('comedy'))))))}
                       onMovieClick={handleMovieSelect}
                     />
                   )}
 
-                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('action')))).length > 0 && (
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && g.toLowerCase().includes('action')))).length > 0 && (
                     <MovieRow 
                       key="genre-action"
                       title="Action & Adventure"
-                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('action'))))}
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && g.toLowerCase().includes('action'))))}
                       onMovieClick={handleMovieSelect}
                     />
                   )}
 
-                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('comedy') && !g.toLowerCase().includes('romance')))).length > 0 && (
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && g.toLowerCase().includes('comedy') && !g.toLowerCase().includes('romance')))).length > 0 && (
                     <MovieRow 
                       key="genre-comedy"
                       title="Comedies"
-                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('comedy'))))}
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && g.toLowerCase().includes('comedy'))))}
                       onMovieClick={handleMovieSelect}
                     />
                   )}
 
-                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('drama')))).length > 0 && (
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && g.toLowerCase().includes('drama')))).length > 0 && (
                     <MovieRow 
                       key="genre-drama"
                       title="Emotional Dramas"
-                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('drama'))))}
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && g.toLowerCase().includes('drama'))))}
                       onMovieClick={handleMovieSelect}
                     />
                   )}
 
-                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('war') || g.toLowerCase().includes('history')))).length > 0 && (
+                  {filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && (g.toLowerCase().includes('war') || g.toLowerCase().includes('history'))))).length > 0 && (
                     <MovieRow 
                       key="genre-war"
                       title="War & History"
-                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g.toLowerCase().includes('war') || g.toLowerCase().includes('history'))))}
+                      movies={filterMovies(allMovies.filter(m => (m.genres || []).some(g => g && typeof g === 'string' && (g.toLowerCase().includes('war') || g.toLowerCase().includes('history')))))}
                       onMovieClick={handleMovieSelect}
                     />
                   )}
