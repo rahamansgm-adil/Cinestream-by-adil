@@ -91,6 +91,12 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       firstSource = `https://www.vidking.net${firstSource}`;
     }
 
+    // Automatically append vidking parameters if they are missing
+    if (firstSource.includes('vidking.net') && !firstSource.includes('autoPlay=')) {
+      const separator = firstSource.includes('?') ? '&' : '?';
+      firstSource = `${firstSource}${separator}autoPlay=true&nextEpisode=true&episodeSelector=true`;
+    }
+
     const isIframe = firstSource.includes('vidking.net') || 
                      firstSource.includes('vidking.com') || 
                      firstSource.includes('mhdtvhub.com') ||
