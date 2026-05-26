@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
-import type Player from 'video.js/dist/types/player';
+import 'video.js/dist/video-js.css';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Loader2, 
@@ -17,17 +17,16 @@ import {
   ChevronLeft,
   Captions
 } from 'lucide-react';
-import 'video.js/dist/video-js.css';
 
 interface VideoPlayerProps {
   options: any;
-  onReady?: (player: Player) => void;
+  onReady?: (player: any) => void;
   onBack?: () => void;
 }
 
 export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
-  const videoRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<Player | null>(null);
+  const videoContainerRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -48,6 +47,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
 
   const formatTime = (seconds: number) => {
+    if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
@@ -71,27 +71,13 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
     }, 3000);
   };
 
+  // Sync state & configure iframe sources
   useEffect(() => {
-    // Handle Google Drive proxy conversion
-    let modifiedOptions = { 
-      ...options,
-      controls: false, // We'll use our own
-      controlBar: false,
-      userActions: {
-        doubleClick: false,
-        hotkeys: true
-      },
-      fluid: true,
-      responsive: true
-    };
-    
-    // Check for iframe sources (Vidking, etc)
     let firstSource = options?.sources?.[0]?.src || '';
     if (firstSource.startsWith('/')) {
       firstSource = `https://www.vidking.net${firstSource}`;
     }
 
-    // Automatically append vidking parameters if they are missing
     if (firstSource.includes('vidking.net') && !firstSource.includes('autoPlay=')) {
       const separator = firstSource.includes('?') ? '&' : '?';
       firstSource = `${firstSource}${separator}autoPlay=true&nextEpisode=true&episodeSelector=true`;
@@ -109,94 +95,105 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
 
     if (isIframe) {
       setIframeUrl(firstSource);
-      return; // Skip video-js initialization for iframes
     } else {
       setIframeUrl(null);
     }
-    
-    // Convert Drive Source URLs
-    if (modifiedOptions.sources) {
-      modifiedOptions.sources = modifiedOptions.sources.map((s: any) => {
-        if (s.src && s.src.includes('drive.google.com')) {
-          const match = s.src.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/);
-          const driveId = match ? match[1] : '';
-          return { ...s, src: `/api/stream?id=${driveId}`, type: 'video/mp4' };
-        }
-        return s;
-      });
-    }
+  }, [options]);
 
-    // Convert Drive Track URLs
-    if (modifiedOptions.tracks) {
-      modifiedOptions.tracks = modifiedOptions.tracks.map((t: any) => {
-        if (t.src && t.src.includes('drive.google.com')) {
-          const match = t.src.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/);
-          const driveId = match ? match[1] : '';
-          return { ...t, src: `/api/stream?id=${driveId}` };
-        }
-        return t;
-      });
-    }
+  // Main Live Stream / Progressive Stream Loading logic (Video.js)
+  useEffect(() => {
+    if (iframeUrl) return;
+    const placeholder = videoContainerRef.current;
+    if (!placeholder) return;
 
     setError(null);
+    setIsBuffering(true);
 
-    if (!playerRef.current) {
-      const videoElement = document.createElement("video-js");
-      videoElement.classList.add('vjs-big-play-centered');
-      videoElement.classList.add('vjs-theme-netflix'); // Custom theme class
-      
-      // Add CORS attributes for streaming support
-      videoElement.setAttribute('crossorigin', 'anonymous');
-      
-      if (videoRef.current) {
-        videoRef.current.appendChild(videoElement);
-      }
-
-      const player = playerRef.current = videojs(videoElement, modifiedOptions, () => {
-        // Events
-        player.on('play', () => setIsPlaying(true));
-        player.on('pause', () => setIsPlaying(false));
-        player.on('timeupdate', () => setCurrentTime(player.currentTime() || 0));
-        player.on('durationchange', () => setDuration(player.duration() || 0));
-        player.on('volumechange', () => {
-          setVolume(player.volume() || 0);
-          setIsMuted(player.muted() || false);
-        });
-        player.on('ratechange', () => setPlaybackSpeed(player.playbackRate() || 1));
-        player.on('waiting', () => setIsBuffering(true));
-        player.on('playing', () => setIsBuffering(false));
-        player.on('fullscreenchange', () => setIsFullscreen(player.isFullscreen() || false));
-
-        // Initial subtitle state
-        const tracks = player.textTracks();
-        for (let i = 0; i < tracks.length; i++) {
-          if (tracks[i].mode === 'showing') {
-            setActiveSubtitle(tracks[i].label);
-          }
-        }
-
-        player.on('error', () => {
-          const vjsError = player.error();
-          console.error('Video.js Error:', vjsError);
-          
-          if (options.sources?.[0]?.src?.includes('.m3u8')) {
-            setError("The live stream could not be loaded. This is often caused by CORS restrictions from the broadcaster or Mixed Content blocking (trying to load HTTP on an HTTPS site). Many IPTV streams do not support browser playback.");
-          } else {
-            setError("The video could not be loaded. This might be due to restricted permissions on Google Drive or an incompatible file format.");
-          }
-        });
-
-        onReady && onReady(player);
-      });
-    } else {
-      const player = playerRef.current;
-      if (modifiedOptions.sources) {
-        player.src(modifiedOptions.sources);
-      }
+    let firstSource = options?.sources?.[0]?.src || '';
+    if (firstSource.includes('drive.google.com')) {
+      const match = firstSource.match(/(?:id=|d\/|file\/d\/)([\w-]{25,})/);
+      const driveId = match ? match[1] : '';
+      firstSource = `/api/stream?id=${driveId}`;
     }
-  }, [options, onReady]);
 
-  // Sync subtitles state with options
+    const isHLS = firstSource.includes('.m3u8') || firstSource.includes('.mpd');
+    let srcType = options?.sources?.[0]?.type || 'video/mp4';
+    if (isHLS) {
+      srcType = 'application/x-mpegURL';
+    }
+
+    // Dynamic clean element creation to ensure React Virtual DOM and Video.js DOM play nicely
+    const videoElement = document.createElement('video-js');
+    videoElement.className = 'video-js w-full h-full object-contain';
+    videoElement.setAttribute('crossorigin', 'anonymous');
+    videoElement.setAttribute('playsinline', 'true');
+    placeholder.appendChild(videoElement);
+
+    const videoJsOptions = {
+      autoplay: true,
+      controls: false, // Fully controlled by our custom CineStream overlay controls!
+      responsive: true,
+      fluid: true,
+      sources: [{
+        src: firstSource,
+        type: srcType
+      }],
+      tracks: options?.tracks || []
+    };
+
+    const player = videojs(videoElement, videoJsOptions, () => {
+      console.log('Video.js player successfully loaded live manifest or source:', firstSource);
+      if (onReady) {
+        onReady(player);
+      }
+    });
+
+    playerRef.current = player;
+
+    // Synchronize player events to our custom controls overlay React states
+    player.on('play', () => setIsPlaying(true));
+    player.on('pause', () => setIsPlaying(false));
+    
+    player.on('timeupdate', () => {
+      setCurrentTime(player.currentTime() || 0);
+    });
+
+    player.on('durationchange', () => {
+      setDuration(player.duration() || 0);
+    });
+
+    player.on('volumechange', () => {
+      setVolume(player.volume() || 1);
+      setIsMuted(player.muted() || false);
+    });
+
+    player.on('ratechange', () => {
+      setPlaybackSpeed(player.playbackRate() || 1);
+    });
+
+    player.on('waiting', () => setIsBuffering(true));
+    player.on('playing', () => setIsBuffering(false));
+    player.on('seeking', () => setIsBuffering(true));
+    player.on('seeked', () => setIsBuffering(false));
+
+    player.on('error', () => {
+      const vError = player.error();
+      console.error('Video.js stream load failed:', vError);
+      setError(`Streaming Error: Code ${vError?.code || 'UNKNOWN'}. This can occur due to broadcaster CORS restrictions or mixed-content (HTTP vs HTTPS) blocks.`);
+    });
+
+    return () => {
+      if (player && !player.isDisposed()) {
+        player.dispose();
+        playerRef.current = null;
+      }
+      if (placeholder) {
+        placeholder.innerHTML = '';
+      }
+    };
+  }, [options?.sources, iframeUrl]);
+
+  // Sync subtitles
   useEffect(() => {
     if (options?.tracks) {
       setSubtitles(options.tracks);
@@ -205,82 +202,96 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
     }
   }, [options?.tracks]);
 
-  // Handle disposal
+  // Monitor Fullscreen Changes
   useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
     return () => {
-      if (playerRef.current) {
-        playerRef.current.dispose();
-        playerRef.current = null;
-      }
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
-      }
+      document.removeEventListener('fullscreenchange', handleFsChange);
     };
   }, []);
 
   const togglePlay = () => {
-    if (!playerRef.current) return;
+    const player = playerRef.current;
+    if (!player) return;
     if (isPlaying) {
-      playerRef.current.pause();
+      player.pause();
     } else {
-      playerRef.current.play();
+      player.play()?.catch((err: any) => console.error("Playback start error:", err));
     }
   };
 
   const skip = (seconds: number) => {
-    if (!playerRef.current) return;
-    playerRef.current.currentTime(playerRef.current.currentTime()! + seconds);
+    const player = playerRef.current;
+    if (!player) return;
+    const current = player.currentTime() || 0;
+    player.currentTime(current + seconds);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!playerRef.current) return;
+    const player = playerRef.current;
+    if (!player) return;
     const time = parseFloat(e.target.value);
-    playerRef.current.currentTime(time);
+    player.currentTime(time);
     setCurrentTime(time);
   };
 
   const toggleMute = () => {
-    if (!playerRef.current) return;
-    playerRef.current.muted(!isMuted);
+    const player = playerRef.current;
+    if (!player) return;
+    const muted = !isMuted;
+    player.muted(muted);
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!playerRef.current) return;
+    const player = playerRef.current;
+    if (!player) return;
     const val = parseFloat(e.target.value);
-    playerRef.current.volume(val);
-    if (val > 0 && isMuted) {
-      playerRef.current.muted(false);
-    } else if (val === 0 && !isMuted) {
-      playerRef.current.muted(true);
+    player.volume(val);
+    setVolume(val);
+    if (val > 0) {
+      player.muted(false);
+    } else {
+      player.muted(true);
     }
   };
 
   const changeSpeed = (speed: number) => {
-    if (!playerRef.current) return;
-    playerRef.current.playbackRate(speed);
+    const player = playerRef.current;
+    if (!player) return;
+    player.playbackRate(speed);
+    setPlaybackSpeed(speed);
     setShowSpeedMenu(false);
   };
 
   const changeSubtitle = (label: string) => {
-    if (!playerRef.current) return;
-    const tracks = playerRef.current.textTracks();
-    for (let i = 0; i < tracks.length; i++) {
-        if (label === 'off') {
-            tracks[i].mode = 'disabled';
-        } else {
-            tracks[i].mode = tracks[i].label === label ? 'showing' : 'disabled';
-        }
+    const player = playerRef.current;
+    if (!player) return;
+    const textTracks = player.textTracks();
+    for (let i = 0; i < textTracks.length; i++) {
+      const track = textTracks[i];
+      if (label === 'off') {
+        track.mode = 'disabled';
+      } else {
+        track.mode = track.label === label ? 'showing' : 'disabled';
+      }
     }
     setActiveSubtitle(label);
     setShowSubtitleMenu(false);
   };
 
   const toggleFullscreen = () => {
-    if (!playerRef.current) return;
-    if (playerRef.current.isFullscreen()) {
-      playerRef.current.exitFullscreen();
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch((err) => {
+        console.error("Fullscreen request failed:", err);
+      });
+      setIsFullscreen(true);
     } else {
-      playerRef.current.requestFullscreen();
+      document.exitFullscreen();
+      setIsFullscreen(false);
     }
   };
 
@@ -301,7 +312,10 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
           key={iframeUrl}
         />
       ) : (
-        <div ref={videoRef} className="w-full h-full" />
+        <div 
+          ref={videoContainerRef} 
+          className="w-full h-full relative" 
+        />
       )}
 
       {/* Custom Controls Overlay */}
@@ -365,38 +379,38 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                         </div>
                       )}
                     </div>
-                )}
-
-                {/* Speed Selector */}
-                <div className="relative">
-                  <button 
-                    onClick={() => {
-                        setShowSpeedMenu(!showSpeedMenu);
-                        setShowSubtitleMenu(false);
-                    }}
-                    className="p-2 hover:bg-white/20 rounded-full transition-colors flex items-center gap-2"
-                  >
-                    <Settings size={24} />
-                    <span className="text-sm font-bold">{playbackSpeed}x</span>
-                  </button>
-                  
-                  {showSpeedMenu && (
-                    <div className="absolute right-0 top-full mt-4 w-32 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50 pointer-events-auto">
-                      {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
-                        <button
-                          key={speed}
-                          onClick={() => changeSpeed(speed)}
-                          className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${playbackSpeed === speed ? 'text-netflix-red font-bold' : ''}`}
-                        >
-                          {speed}x
-                        </button>
-                      ))}
-                    </div>
                   )}
+
+                  {/* Speed Selector */}
+                  <div className="relative">
+                    <button 
+                      onClick={() => {
+                          setShowSpeedMenu(!showSpeedMenu);
+                          setShowSubtitleMenu(false);
+                      }}
+                      className="p-2 hover:bg-white/20 rounded-full transition-colors flex items-center gap-2"
+                    >
+                      <Settings size={24} />
+                      <span className="text-sm font-bold">{playbackSpeed}x</span>
+                    </button>
+                    
+                    {showSpeedMenu && (
+                      <div className="absolute right-0 top-full mt-4 w-32 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden py-2 z-50 pointer-events-auto">
+                        {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
+                          <button
+                            key={speed}
+                            onClick={() => changeSpeed(speed)}
+                            className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors ${playbackSpeed === speed ? 'text-netflix-red font-bold' : ''}`}
+                          >
+                            {speed}x
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
             {/* Middle clickable area for play/pause toggle */}
             <div 
@@ -404,7 +418,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
               onClick={() => togglePlay()}
             />
 
-            {/* Center Play/Pause Large Feed (Optional, but icons only for buffering) */}
+            {/* Center Play/Pause Large Feed */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               {isBuffering && (
                 <Loader2 className="animate-spin text-netflix-red" size={80} />
@@ -414,41 +428,47 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
             {/* Bottom Controls */}
             {!iframeUrl && (
               <div className="p-8 pb-10 space-y-4 pointer-events-auto">
-                {/* Progress Bar Container */}
-                <div className="group/progress relative h-2 w-full flex items-center">
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 100}
-                    step={0.1}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="absolute inset-0 w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer accent-netflix-red hover:h-2 transition-all"
-                    style={{
-                      background: `linear-gradient(to right, #E50914 ${(currentTime / (duration || 1)) * 100}%, rgba(255,255,255,0.3) ${(currentTime / (duration || 1)) * 100}%)`
-                    }}
-                  />
-                </div>
+                {/* Progress Bar Container - only display seeker bar if duration exists */}
+                {duration > 0 && isFinite(duration) && (
+                  <div className="group/progress relative h-2 w-full flex items-center">
+                    <input
+                      type="range"
+                      min={0}
+                      max={duration || 100}
+                      step={0.1}
+                      value={currentTime}
+                      onChange={handleSeek}
+                      className="absolute inset-0 w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer accent-netflix-red hover:h-2 transition-all"
+                      style={{
+                        background: `linear-gradient(to right, #E50914 ${(currentTime / (duration || 1)) * 100}%, rgba(255,255,255,0.3) ${(currentTime / (duration || 1)) * 100}%)`
+                      }}
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6">
                     {/* Play/Pause */}
-                    <button onClick={togglePlay} className="transition-transform hover:scale-110">
+                    <button onClick={togglePlay} className="transition-transform hover:scale-110 text-white">
                       {isPlaying ? <Pause size={32} fill="white" /> : <Play size={32} fill="white" />}
                     </button>
 
                     {/* Skip Rewind/Forward */}
-                    <button onClick={() => skip(-10)} className="group/skip flex flex-col items-center">
-                      <RotateCcw size={24} className="group-hover/skip:animate-pulse" />
-                      <span className="text-[10px] font-bold mt-1">10</span>
-                    </button>
-                    <button onClick={() => skip(10)} className="group/skip flex flex-col items-center">
-                      <RotateCw size={24} className="group-hover/skip:animate-pulse" />
-                      <span className="text-[10px] font-bold mt-1">10</span>
-                    </button>
+                    {duration > 0 && isFinite(duration) && (
+                      <>
+                        <button onClick={() => skip(-10)} className="group/skip flex flex-col items-center text-white">
+                          <RotateCcw size={24} className="group-hover/skip:animate-pulse" />
+                          <span className="text-[10px] font-bold mt-1">10</span>
+                        </button>
+                        <button onClick={() => skip(10)} className="group/skip flex flex-col items-center text-white">
+                          <RotateCw size={24} className="group-hover/skip:animate-pulse" />
+                          <span className="text-[10px] font-bold mt-1">10</span>
+                        </button>
+                      </>
+                    )}
 
                     {/* Volume */}
-                    <div className="flex items-center gap-3 group/volume">
+                    <div className="flex items-center gap-3 group/volume text-white">
                       <button onClick={toggleMute} className="transition-transform hover:scale-110">
                         {isMuted || volume === 0 ? <VolumeX size={24} /> : <Volume2 size={24} />}
                       </button>
@@ -464,12 +484,19 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
                     </div>
 
                     {/* Time */}
-                    <div className="text-sm font-medium tracking-wider">
-                      {formatTime(currentTime)} / {formatTime(duration)}
+                    <div className="text-sm font-medium tracking-wider text-white">
+                      {duration > 0 && isFinite(duration) ? (
+                        `${formatTime(currentTime)} / ${formatTime(duration)}`
+                      ) : (
+                        <span className="flex items-center gap-2 font-bold text-netflix-red">
+                          <span className="w-2 h-2 bg-netflix-red rounded-full animate-ping" />
+                          LIVE
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 text-white">
                     {/* Fullscreen */}
                     <button onClick={toggleFullscreen} className="p-2 transition-transform hover:scale-110">
                       {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
@@ -489,24 +516,24 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-8 text-center"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 p-8 text-center"
           >
             <AlertTriangle className="text-netflix-red mb-4" size={48} />
-            <h2 className="text-xl font-bold mb-4">Playback Error</h2>
-            <p className="text-gray-300 max-w-md mx-auto leading-relaxed underline decoration-netflix-red/30 underline-offset-4">
+            <h2 className="text-xl font-bold mb-4 text-white">Playback Error</h2>
+            <p className="text-gray-300 max-w-md mx-auto leading-relaxed text-sm">
               {error}
             </p>
             <div className="flex gap-4">
               <button 
                 onClick={() => window.location.reload()}
-                className="mt-8 px-6 py-2 bg-white text-black font-bold uppercase tracking-wider rounded-sm hover:bg-gray-200 transition-colors"
+                className="mt-8 px-6 py-2 bg-white text-black font-bold uppercase tracking-wider rounded-sm hover:bg-gray-200 transition-colors text-xs"
               >
                 Reload
               </button>
               {onBack && (
                 <button 
                   onClick={onBack}
-                  className="mt-8 px-6 py-2 border border-white/30 text-white font-bold uppercase tracking-wider rounded-sm hover:bg-white/10 transition-colors"
+                  className="mt-8 px-6 py-2 border border-white/30 text-white font-bold uppercase tracking-wider rounded-sm hover:bg-white/10 transition-colors text-xs"
                 >
                   Close
                 </button>
@@ -517,7 +544,6 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       </AnimatePresence>
     </div>
   );
-}
+};
 
 export default VideoPlayer;
-

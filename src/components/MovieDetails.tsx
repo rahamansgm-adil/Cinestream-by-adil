@@ -46,7 +46,7 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
       return;
     }
 
-    const listDocId = `${user.uid}_${movie.id}`;
+    const listDocId = `${user.uid}_${movie.id}`.replace(/[^a-zA-Z0-9_\-]/g, '_');
     const unsubscribe = onSnapshot(doc(db, 'myList', listDocId), (snapshot) => {
       setIsInList(snapshot.exists());
     });
@@ -118,7 +118,7 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
 
     setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'movies', movie.id));
+      await deleteDoc(doc(db, 'movies', movie.id.replace(/[^a-zA-Z0-9_\-]/g, '_')));
       onClose();
     } catch (error: any) {
       console.error("Error deleting movie:", error);
@@ -132,7 +132,7 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
     if (!user || !movie || isUpdatingList) return;
 
     setIsUpdatingList(true);
-    const listDocId = `${user.uid}_${movie.id}`;
+    const listDocId = `${user.uid}_${movie.id}`.replace(/[^a-zA-Z0-9_\-]/g, '_');
     
     try {
       if (isInList) {
@@ -513,8 +513,8 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
                              <button className="text-[10px] font-black text-netflix-red uppercase tracking-widest px-3 py-1 bg-netflix-red/10 rounded-full border border-netflix-red/20 shadow-lg">See All</button>
                           </div>
                           <div className="flex gap-4 overflow-x-auto scrollbar-hide -mx-6 px-6">
-                             {movie.castDetails.map((person) => (
-                               <div key={person.id} className="flex flex-col items-center gap-3 shrink-0 w-24">
+                             {movie.castDetails.map((person, idx) => (
+                               <div key={`${person.id}-${idx}`} className="flex flex-col items-center gap-3 shrink-0 w-24">
                                   <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/5 bg-zinc-900 group shadow-lg">
                                      <img 
                                       src={person.profileUrl || 'https://via.placeholder.com/185x185?text=Cast'} 
@@ -581,7 +581,7 @@ export const MovieDetails = ({ movie, user, onClose, onPlay, onMovieClick }: Mov
                       <div className="space-y-6">
                         {currentEpisodes.map((ep, idx) => (
                            <motion.div 
-                            key={ep.id}
+                            key={`${ep.id}-${idx}`}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: idx * 0.05 }}

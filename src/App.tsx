@@ -75,9 +75,10 @@ export default function App() {
           const currentEp = (currentMovie as any).currentEpisode;
           
           // Unique ID per movie/episode to track individual progress
-          const progressId = currentEp?.id 
+          const rawProgressId = currentEp?.id 
             ? `${user.uid}_${currentMovie.id}_${currentEp.id}` 
             : `${user.uid}_${currentMovie.id}`;
+          const progressId = rawProgressId.replace(/[^a-zA-Z0-9_\-]/g, '_');
 
           setDoc(doc(db, 'userProgress', progressId), {
             movieId: currentMovie.id,
@@ -162,8 +163,14 @@ export default function App() {
       ...tmdbMovies.war
     ].filter(Boolean); // Safety check
     
-    // Use a Map to ensure unique by ID
-    const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+    // Use a Map to ensure unique by ID and filter out invalid items
+    const uniqueMap = new Map();
+    combined.forEach(m => {
+      if (m && m.id && m.id !== 'undefined') {
+        uniqueMap.set(m.id, m);
+      }
+    });
+    const unique = Array.from(uniqueMap.values());
     
     let filtered = unique;
     if (activeCategory !== 'all') {
@@ -360,24 +367,24 @@ export default function App() {
       let movie = allMovies.find(m => m.id === progress.movieId);
       
       // If not found, create a placeholder from progress data until full details load
-      // This ensures the row doesn't disappear if the movie isn't in the current trending/popular lists
-      if (!movie) {
-        // We might want to fetch it explicitly, but for now we can at least show what we have
-        return null; 
-      }
+      if (!movie) return null; 
       
       return {
         ...movie,
-        // Override with progress specific data
-        videoUrl: (progress as any).videoUrl || movie.videoUrl,
         progress: progress.progress,
         totalDuration: progress.duration,
         progressId: progress.id,
         currentEpisodeId: (progress as any).episodeId
       };
-    }).filter(Boolean) as (Movie & { progress: number; totalDuration: number; progressId: string; currentEpisodeId?: string })[];
+    }).filter(Boolean);
 
-    return Array.from(new Map(movies.map(m => [m.id, m])).values());
+    // Deduplicate by movieId to prevent duplicate keys if progress has multiple entries
+    const uniqueProgressMap = new Map();
+    movies.forEach(m => {
+      if (m) uniqueProgressMap.set(m.id, m);
+    });
+    
+    return Array.from(uniqueProgressMap.values()) as (Movie & { progress: number; totalDuration: number; progressId: string; currentEpisodeId?: string })[];
   }, [allMovies, userProgress, user]);
 
   const myListMovies = useMemo(() => {
@@ -451,9 +458,10 @@ export default function App() {
           lastSavedTime = currentTime;
           
           const currentEp = (playingMovie as any).currentEpisode;
-          const progressId = currentEp?.id 
+          const rawProgressId = currentEp?.id 
             ? `${user.uid}_${playingMovie.id}_${currentEp.id}` 
             : `${user.uid}_${playingMovie.id}`;
+          const progressId = rawProgressId.replace(/[^a-zA-Z0-9_\-]/g, '_');
 
           setDoc(doc(db, 'userProgress', progressId), {
             movieId: playingMovie.id,
@@ -590,9 +598,9 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-y-8 md:gap-y-12 gap-x-4 md:gap-x-6">
-                    {myListMovies.map((movie) => (
+                    {myListMovies.map((movie, idx) => (
                       <div 
-                        key={movie.id}
+                        key={`${movie.id}-${idx}`}
                         onClick={() => handleMovieSelect(movie)}
                         className="group relative cursor-pointer"
                       >
@@ -817,8 +825,8 @@ export default function App() {
             <h2 className="text-xl md:text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
             {allMovies.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-y-8 md:gap-y-12 gap-x-4 md:gap-x-6">
-                {allMovies.map(movie => (
-                  <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="group cursor-pointer">
+                {allMovies.map((movie, idx) => (
+                  <div key={`${movie.id}-${idx}`} onClick={() => handleMovieSelect(movie)} className="group cursor-pointer">
                     <div className="relative aspect-[2/3] overflow-hidden rounded-md border border-white/5 shadow-2xl hover:scale-105 transition-all duration-300">
                       <img 
                         src={movie.thumbnailUrl} 

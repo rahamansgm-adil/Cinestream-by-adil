@@ -38,7 +38,15 @@ export const tmdbService = {
   },
 
   uniqueById<T extends { id: string }>(items: T[]): T[] {
-    return Array.from(new Map(items.map(item => [item.id, item])).values());
+    if (!items) return [];
+    // Only keep items with a valid, non-empty id, and ensure they are unique
+    const uniqueMap = new Map<string, T>();
+    items.forEach(item => {
+      if (item && item.id && item.id !== 'undefined' && item.id !== 'null') {
+        uniqueMap.set(item.id, item);
+      }
+    });
+    return Array.from(uniqueMap.values());
   },
 
   mapToMovie(tmdbItem: any, type: 'movie' | 'tv' = 'movie'): Movie {
