@@ -28,6 +28,18 @@ export const tmdbService = {
     }
   },
 
+  async getHomeContent() {
+    try {
+      const isNetlify = window.location.hostname.includes('netlify.app');
+      const apiPath = isNetlify ? '/.netlify/functions/home' : '/api/content/home';
+      const response = await axios.get(apiPath, { timeout: 45000 });
+      return response.data;
+    } catch (error: any) {
+      console.error("[TMDB Service] Failed to fetch precompiled home catalog. Falling back to on-demand fetches...", error.message);
+      return null;
+    }
+  },
+
   genreMap: {
     28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
     99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',

@@ -241,20 +241,20 @@ export const Hero = ({ movies, onPlay, onMoreInfo }: HeroProps) => {
               >
                 <button 
                   onClick={handlePlayClick}
-                  className="flex items-center justify-center gap-2 bg-white text-black px-4 md:px-8 py-2 md:py-3 rounded hover:bg-white/90 transition-all font-bold shadow-lg text-sm md:text-base active:scale-95"
+                  className="flex items-center justify-center gap-2 bg-white text-black px-4 md:px-8 py-2 md:py-3 rounded hover:bg-white/90 focus:ring-4 focus:ring-white/50 focus:outline-none focus:scale-105 transition-all font-bold shadow-lg text-sm md:text-base active:scale-95"
                 >
                   <Play size={20} className="md:w-6 md:h-6" fill="black" /> 
                   <span>{movie.contentType === 'tv' ? 'S1:E1 Play' : 'Play'}</span>
                 </button>
                 <button 
                   onClick={() => onMoreInfo(movie)}
-                  className="flex items-center justify-center gap-2 bg-gray-500/50 text-white px-4 md:px-8 py-2 md:py-3 rounded hover:bg-gray-500/40 transition-all font-bold backdrop-blur-md border border-white/10 text-sm md:text-base active:scale-95"
+                  className="flex items-center justify-center gap-2 bg-gray-500/50 text-white px-4 md:px-8 py-2 md:py-3 rounded hover:bg-gray-500/40 focus:ring-4 focus:ring-gray-300/40 focus:outline-none focus:scale-105 transition-all font-bold backdrop-blur-md border border-white/10 text-sm md:text-base active:scale-95"
                 >
                   <Info size={20} className="md:w-6 md:h-6" /> More Info
                 </button>
                 <button 
                   onClick={handleDownload}
-                  className="flex items-center justify-center p-2 md:p-3 bg-gray-500/50 text-white rounded hover:bg-gray-500/40 transition-all backdrop-blur-md border border-white/10 active:scale-95"
+                  className="flex items-center justify-center p-2 md:p-3 bg-gray-500/50 text-white rounded hover:bg-gray-500/40 focus:ring-4 focus:ring-gray-300/40 focus:outline-none focus:scale-105 transition-all backdrop-blur-md border border-white/10 active:scale-95"
                   title="Download"
                 >
                   <Download size={20} className="md:w-6 md:h-6" />

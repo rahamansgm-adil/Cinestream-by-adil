@@ -68,33 +68,43 @@ export const Navbar = ({
         
         <ul className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-200">
           <li 
+            tabIndex={0}
             onClick={() => onCategoryChange('all')}
-            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'all' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCategoryChange('all'); } }}
+            className={cn("cursor-pointer transition-colors hover:text-white focus:outline-none focus:text-white focus:ring-2 focus:ring-netflix-red/50 px-2 py-1 rounded", activeCategory === 'all' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
           >
             Home
           </li>
           <li 
+            tabIndex={0}
             onClick={() => onCategoryChange('tv')}
-            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'tv' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCategoryChange('tv'); } }}
+            className={cn("cursor-pointer transition-colors hover:text-white focus:outline-none focus:text-white focus:ring-2 focus:ring-netflix-red/50 px-2 py-1 rounded", activeCategory === 'tv' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
           >
             TV Shows
           </li>
           <li 
+            tabIndex={0}
             onClick={() => onCategoryChange('movie')}
-            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'movie' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCategoryChange('movie'); } }}
+            className={cn("cursor-pointer transition-colors hover:text-white focus:outline-none focus:text-white focus:ring-2 focus:ring-netflix-red/50 px-2 py-1 rounded", activeCategory === 'movie' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
           >
             Movies
           </li>
           <li 
+            tabIndex={0}
             onClick={() => onCategoryChange('live')}
-            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'live' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCategoryChange('live'); } }}
+            className={cn("cursor-pointer transition-colors hover:text-white focus:outline-none focus:text-white focus:ring-2 focus:ring-netflix-red/50 px-2 py-1 rounded", activeCategory === 'live' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
           >
             Live TV
           </li>
           <li className="hover:text-gray-400 cursor-pointer transition-colors">New & Popular</li>
           <li 
+            tabIndex={0}
             onClick={() => onCategoryChange('my-list')}
-            className={cn("cursor-pointer transition-colors hover:text-white", activeCategory === 'my-list' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCategoryChange('my-list'); } }}
+            className={cn("cursor-pointer transition-colors hover:text-white focus:outline-none focus:text-white focus:ring-2 focus:ring-netflix-red/50 px-2 py-1 rounded", activeCategory === 'my-list' ? "text-white font-bold underline decoration-netflix-red decoration-2 underline-offset-8" : "text-gray-400")}
           >
             My List
           </li>
