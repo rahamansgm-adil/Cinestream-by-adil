@@ -19,14 +19,12 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 import { MOVIES as initialMovies, CATEGORIES, Movie } from './data/movies';
 import { tmdbService } from './services/tmdbService';
-import { useSpatialNavigation } from './utils/useSpatialNavigation';
 import { db, auth, signInWithGoogle, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, query, orderBy, onSnapshot, getDocs, writeBatch, doc, setDoc, serverTimestamp, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { UserProgress } from './data/movies';
 
 export default function App() {
-  useSpatialNavigation(true);
   const [movies, setMovies] = useState<Movie[]>(initialMovies);
   const [dbMovies, setDbMovies] = useState<Movie[]>([]);
   const [tmdbMovies, setTmdbMovies] = useState<Record<string, Movie[]>>({
@@ -284,30 +282,6 @@ export default function App() {
     const fetchInitial = async () => {
       console.log("[App] Starting initial catalog fetch...");
       try {
-        // Try the server-aggregated and cached endpoint first to save multiple fetches on low-end devices
-        const homePayload = await tmdbService.getHomeContent();
-        
-        if (homePayload) {
-          console.log("[App] High-speed compiled home feed loaded successfully!");
-          setTmdbMovies(prev => ({
-            ...prev,
-            trending: homePayload.trending || [],
-            popular: homePayload.popular || [],
-            netflix: homePayload.netflix || [],
-            latest: homePayload.latest || [],
-            topRated: homePayload.topRated || [],
-            jioHotstar: homePayload.jioHotstar || [],
-            primeVideo: homePayload.primeVideo || [],
-            action: homePayload.action || [],
-            comedy: homePayload.comedy || [],
-            drama: homePayload.drama || [],
-            romance: homePayload.romance || [],
-            war: homePayload.war || []
-          }));
-          return;
-        }
-
-        console.log("[App] Cached compiled feed not resolved. Processing on-demand fallbacks...");
         const [
           trendingData, popular, netflix, latest, topRated, 
           jioHotstar, primeVideo,

@@ -213,6 +213,69 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
     };
   }, []);
 
+  // Keyboard navigation remote controls for native (m3u8/mp4) streams
+  useEffect(() => {
+    if (iframeUrl) return;
+
+    const handlePlayerKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      handleMouseMove();
+
+      switch (e.key) {
+        case ' ': // Space Key
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          skip(-10);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          skip(10);
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          {
+            const player = playerRef.current;
+            if (player) {
+              const currentV = player.volume() || 0;
+              const nextV = Math.min(1, currentV + 0.1);
+              player.volume(nextV);
+              setVolume(nextV);
+            }
+          }
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          {
+            const player = playerRef.current;
+            if (player) {
+              const currentV = player.volume() || 0;
+              const nextV = Math.max(0, currentV - 0.1);
+              player.volume(nextV);
+              setVolume(nextV);
+            }
+          }
+          break;
+        case 'Escape':
+        case 'Backspace':
+          if (onBack) {
+            e.preventDefault();
+            onBack();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handlePlayerKeyDown);
+    return () => window.removeEventListener('keydown', handlePlayerKeyDown);
+  }, [iframeUrl, isPlaying, onBack]);
+
   const togglePlay = () => {
     const player = playerRef.current;
     if (!player) return;

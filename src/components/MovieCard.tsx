@@ -13,22 +13,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
     ? (movie.progress / movie.totalDuration) * 100 
     : 0;
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onClick(movie);
-    }
-  };
-
   return (
     <motion.div 
-      tabIndex={0}
-      className="relative group min-w-[140px] sm:min-w-[180px] md:min-w-[220px] aspect-[2/3] cursor-pointer rounded-md overflow-hidden border border-transparent hover:border-white/20 focus:border-netflix-red focus:scale-105 focus:ring-4 focus:ring-netflix-red/60 focus:outline-none focus:z-10 transition-all duration-300 shadow-2xl"
+      className="relative group min-w-[140px] sm:min-w-[180px] md:min-w-[220px] aspect-[2/3] cursor-pointer rounded-md overflow-hidden border border-transparent hover:border-white/50 transition-all duration-500 shadow-2xl"
       initial={{ opacity: 1 }}
       whileHover={{ scale: 1.05, zIndex: 10 }}
-      whileFocus={{ scale: 1.05, zIndex: 10 }}
       onClick={() => onClick(movie)}
-      onKeyDown={handleKeyDown}
     >
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10" />
       <img 

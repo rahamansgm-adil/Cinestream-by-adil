@@ -315,422 +315,12 @@ async function startServer() {
     }
   });
 
-  // ==========================================
-  // TMDB CACHING ENGINE & AGGREGATED HOME PAYLOAD
-  // ==========================================
-
-  const serverGenreMap: Record<number, string> = {
-    28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
-    99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
-    27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
-    10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western',
-    10759: 'Action & Adventure', 10762: 'Kids', 10763: 'News', 10764: 'Reality',
-    10765: 'Sci-Fi & Fantasy', 10766: 'Soap', 10767: 'Talk', 10768: 'War & Politics'
-  };
-
-  function mapToMovieServer(tmdbItem: any, type: 'movie' | 'tv' = 'movie'): any {
-    const isTV = type === 'tv';
-    let genres = (tmdbItem.genre_ids || []).map((id: number) => serverGenreMap[id]).filter(Boolean);
-    
-    if (genres.includes('Romance') && genres.includes('Comedy')) {
-      genres.push('RomCom');
-    }
-    genres = Array.from(new Set(genres));
-
-    return {
-      id: String(tmdbItem.id),
-      title: tmdbItem.title || tmdbItem.name || 'Untitled',
-      description: tmdbItem.overview || 'No description available.',
-      thumbnailUrl: tmdbItem.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbItem.poster_path}` : 'https://via.placeholder.com/500x750',
-      bannerUrl: tmdbItem.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdbItem.backdrop_path}` : 'https://via.placeholder.com/1920x1080',
-      videoUrl: isTV ? `https://www.vidking.net/embed/tv/${tmdbItem.id}/1/1?autoPlay=true&nextEpisode=true&episodeSelector=true` : `https://www.vidking.net/embed/movie/${tmdbItem.id}?autoPlay=true&nextEpisode=true&episodeSelector=true`,
-      duration: isTV ? 'Series' : 'Feature',
-      year: (tmdbItem.release_date || tmdbItem.first_air_date || '').split('-')[0] || 'Unknown',
-      rating: String(tmdbItem.vote_average || 'NR'),
-      genres: genres,
-      cast: [],
-      contentType: type
-    };
-  }
-
-  function uniqueByIdServer(items: any[]): any[] {
-    if (!items) return [];
-    const uniqueMap = new Map();
-    items.forEach(item => {
-      if (item && item.id && item.id !== 'undefined' && item.id !== 'null') {
-        uniqueMap.set(item.id, item);
-      }
-    });
-    return Array.from(uniqueMap.values());
-  }
-
-  const generalTmdbCache = new Map<string, { data: any, timestamp: number }>();
-  const GENERAL_CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours cache TTL for individual calls
-
-  async function fetchFromProxyCached(path: string, params: Record<string, any> = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    const cacheKey = `/api/tmdb/${path}` + (queryString ? `?${queryString}` : '');
-    
-    const cachedEntry = generalTmdbCache.get(cacheKey);
-    if (cachedEntry && (Date.now() - cachedEntry.timestamp < GENERAL_CACHE_TTL)) {
-      return cachedEntry.data;
-    }
-    
-    const tmdbKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || "";
-    let effectiveKey = tmdbKey.trim();
-    if (!effectiveKey) {
-      throw new Error("TMDB API Key missing in environment variables");
-    }
-
-    const isBearer = effectiveKey.length > 40 || effectiveKey.startsWith('ey');
-    const headers: any = {
-      'Accept': 'application/json',
-      'User-Agent': 'CineStream-App'
-    };
-
-    let url = `https://api.themoviedb.org/3/${path}`;
-    if (isBearer) {
-      const token = effectiveKey.replace(/^Bearer\s+/i, '');
-      headers['Authorization'] = `Bearer ${token}`;
-      if (queryString) url += `?${queryString}`;
-    } else {
-      const queryWithKey = { ...params, api_key: effectiveKey };
-      const fullQueryString = new URLSearchParams(queryWithKey).toString();
-      url += `?${fullQueryString}`;
-    }
-
-    const response = await axios.get(url, { headers, timeout: 30000 });
-    generalTmdbCache.set(cacheKey, { data: response.data, timestamp: Date.now() });
-    return response.data;
-  }
-
-  async function getMovieDetailsServer(id: string, type: 'movie' | 'tv' = 'movie') {
-    try {
-      const data = await fetchFromProxyCached(`${type}/${id}`, { 
-        append_to_response: 'credits,videos,recommendations,images', 
-        include_image_language: 'en,null' 
-      });
-      if (!data) return null;
-
-      const movie = mapToMovieServer(data, type);
-      
-      if (data.images && data.images.logos && data.images.logos.length > 0) {
-        const englishLogo = data.images.logos.find((l: any) => l.iso_639_1 === 'en');
-        const logo = englishLogo || data.images.logos[0];
-        movie.logoUrl = `https://image.tmdb.org/t/p/original${logo.file_path}`;
-      }
-
-      let rawGenres = (data.genres || []).map((g: any) => g.name);
-      if (rawGenres.includes('Romance') && rawGenres.includes('Comedy')) {
-        if (!rawGenres.includes('RomCom')) rawGenres.push('RomCom');
-      }
-      movie.genres = Array.from(new Set(rawGenres));
-      movie.cast = (data.credits?.cast || []).slice(0, 10).map((c: any) => c.name);
-      
-      movie.castDetails = (data.credits?.cast || []).slice(0, 12).map((c: any) => ({
-        id: String(c.id),
-        name: c.name,
-        character: c.character,
-        profileUrl: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null
-      }));
-
-      const director = data.credits?.crew?.find((c: any) => c.job === 'Director' || c.job === 'Executive Producer');
-      if (director) {
-        movie.director = {
-          id: String(director.id),
-          name: director.name,
-          job: director.job,
-          department: director.department,
-          profileUrl: director.profile_path ? `https://image.tmdb.org/t/p/w185${director.profile_path}` : null,
-          bio: ''
-        };
-      }
-
-      movie.duration = type === 'tv' 
-        ? `${data.number_of_seasons} Season${data.number_of_seasons > 1 ? 's' : ''}`
-        : `${data.runtime} min`;
-
-      const trailer = data.videos?.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
-      if (trailer) {
-        movie.trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
-      }
-
-      if (data.recommendations && data.recommendations.results) {
-        const recommendations = data.recommendations.results
-          .slice(0, 15)
-          .map((item: any) => mapToMovieServer(item, item.media_type || type));
-        movie.recommendations = uniqueByIdServer(recommendations);
-      }
-
-      return movie;
-    } catch (err: any) {
-      console.error(`[Server TMDB Detail Error] id ${id}:`, err.message);
-      return null;
-    }
-  }
-
-  async function getTrendingServer(type: 'movie' | 'tv' | 'all' = 'all') {
-    try {
-      const pages = [1, 2, 3];
-      const results = await Promise.all(pages.map(page => fetchFromProxyCached(`trending/${type}/week`, { page })));
-      const combined = results.flatMap(data => (data?.results || []));
-      if (combined.length === 0) return [];
-      const movies = combined.map((item: any) => mapToMovieServer(item, item.media_type || (type === 'all' ? 'movie' : type)));
-      return uniqueByIdServer(movies);
-    } catch (e: any) {
-      console.error("[Server TMDB Error] trending failed:", e.message);
-      return [];
-    }
-  }
-
-  async function getPopularServer(type: 'movie' | 'tv' = 'movie') {
-    try {
-      const pages = [1, 2, 3];
-      const results = await Promise.all(pages.map(page => fetchFromProxyCached(`${type}/popular`, { page })));
-      const combined = results.flatMap(data => (data?.results || []));
-      if (combined.length === 0) return [];
-      const movies = combined.map((item: any) => mapToMovieServer(item, type));
-      return uniqueByIdServer(movies);
-    } catch (e: any) {
-      console.error("[Server TMDB Error] popular failed:", e.message);
-      return [];
-    }
-  }
-
-  async function getNetflixOriginalsServer() {
-    try {
-      const pages = [1, 2, 3];
-      const results = await Promise.all(pages.map(page => fetchFromProxyCached('discover/tv', { with_networks: 213, sort_by: 'popularity.desc', page })));
-      const combined = results.flatMap(data => (data?.results || []));
-      if (combined.length === 0) return [];
-      const movies = combined.map((item: any) => mapToMovieServer(item, 'tv'));
-      return uniqueByIdServer(movies);
-    } catch (e: any) {
-      console.error("[Server TMDB Error] netflix failed:", e.message);
-      return [];
-    }
-  }
-
-  async function getLatestReleaseServer() {
-    try {
-      const pages = [1, 2, 3];
-      const results = await Promise.all(pages.map(page => fetchFromProxyCached('movie/now_playing', { page })));
-      const combined = results.flatMap(data => (data?.results || []));
-      if (combined.length === 0) return [];
-      const movies = combined.map((item: any) => mapToMovieServer(item, 'movie'));
-      return uniqueByIdServer(movies);
-    } catch (e: any) {
-      console.error("[Server TMDB Error] latest failed:", e.message);
-      return [];
-    }
-  }
-
-  async function getTopRatedServer(type: 'movie' | 'tv' = 'movie') {
-    try {
-      const pages = [1, 2, 3];
-      const results = await Promise.all(pages.map(page => fetchFromProxyCached(`${type}/top_rated`, { page })));
-      const combined = results.flatMap(data => (data?.results || []));
-      if (combined.length === 0) return [];
-      const movies = combined.map((item: any) => mapToMovieServer(item, type));
-      return uniqueByIdServer(movies);
-    } catch (e: any) {
-      console.error("[Server TMDB Error] toprated failed:", e.message);
-      return [];
-    }
-  }
-
-  async function getByGenreServer(genreId: number, type: 'movie' | 'tv' = 'movie') {
-    try {
-      const pages = [1, 2, 3];
-      const results = await Promise.all(pages.map(page => fetchFromProxyCached(`discover/${type}`, { with_genres: genreId, page })));
-      const combined = results.flatMap(data => (data?.results || []));
-      if (combined.length === 0) return [];
-      const movies = combined.map((item: any) => mapToMovieServer(item, type));
-      return uniqueByIdServer(movies);
-    } catch (e: any) {
-      console.error(`[Server TMDB Error] genre ${genreId} failed:`, e.message);
-      return [];
-    }
-  }
-
-  async function getByProviderServer(providerIds: string, networkIds: string = '', type: 'movie' | 'tv' = 'movie', region: string = 'IN') {
-    try {
-      const pages = [1, 2, 3];
-      
-      const fetchPages = async (pIds: string, nIds: string, rgn: string) => {
-        const results = await Promise.all(pages.map(page => 
-          fetchFromProxyCached(`discover/${type}`, { 
-            with_watch_providers: pIds, 
-            watch_region: rgn,
-            sort_by: 'popularity.desc',
-            page,
-            ...(nIds ? { with_networks: nIds } : {})
-          })
-        ));
-        return results.flatMap(data => (data?.results || []));
-      };
-
-      let combinedResults = await fetchPages(providerIds, '', region);
-      
-      if ((combinedResults.length < 10) && networkIds) {
-        const networkResults = await fetchPages('', networkIds, '');
-        if (networkResults.length > combinedResults.length) {
-          combinedResults = networkResults;
-        }
-      }
-      
-      if (combinedResults.length === 0) {
-        combinedResults = await fetchPages(providerIds, '', '');
-      }
-
-      const uniqueResults = Array.from(new Map(combinedResults.map(m => [m.id, m])).values());
-      return uniqueResults.map((item: any) => mapToMovieServer(item, type));
-    } catch (e: any) {
-      console.error(`[Server TMDB Error] provider ${providerIds} failed:`, e.message);
-      return [];
-    }
-  }
-
-  async function getJioHotstarContentServer() {
-    const movies = await getByProviderServer('122|220|337', '2739|4474', 'movie');
-    const tv = await getByProviderServer('122|220|337', '2739|4474', 'tv');
-    const combined = [...movies, ...tv];
-    return uniqueByIdServer(combined)
-      .sort((a, b) => {
-        const r1 = a.rating === 'NR' ? 0 : parseFloat(a.rating);
-        const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
-        return r2 - r1;
-      })
-      .slice(0, 80);
-  }
-
-  async function getAmazonPrimeContentServer() {
-    const movies = await getByProviderServer('119|9', '1024', 'movie');
-    const tv = await getByProviderServer('119|9', '1024', 'tv');
-    const combined = [...movies, ...tv];
-    return uniqueByIdServer(combined)
-      .sort((a, b) => {
-        const r1 = a.rating === 'NR' ? 0 : parseFloat(a.rating);
-        const r2 = b.rating === 'NR' ? 0 : parseFloat(b.rating);
-        return r2 - r1;
-      })
-      .slice(0, 80);
-  }
-
-  let cachedHomePayload: any = null;
-  let cachedHomeTimestamp = 0;
-  const HOME_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours caching for entire compiled Home
-  let isPrewarming = false;
-
-  async function compileHomePayload(): Promise<any> {
-    if (isPrewarming) return cachedHomePayload;
-    isPrewarming = true;
-    console.log("[Server TMDB] Compiling unified home feed payload...");
-    
-    try {
-      const [
-        trending, popular, netflix, latest, topRated, 
-        jioHotstar, primeVideo,
-        actionMovies, actionTV,
-        comedyMovies, comedyTV,
-        dramaMovies, dramaTV,
-        romanceMovies, romanceTV,
-        warMovies, warTV
-      ] = await Promise.all([
-        getTrendingServer(),
-        getPopularServer(),
-        getNetflixOriginalsServer(),
-        getLatestReleaseServer(),
-        getTopRatedServer(),
-        getJioHotstarContentServer(),
-        getAmazonPrimeContentServer(),
-        getByGenreServer(28, 'movie'), getByGenreServer(10759, 'tv'),
-        getByGenreServer(35, 'movie'), getByGenreServer(35, 'tv'),
-        getByGenreServer(18, 'movie'), getByGenreServer(18, 'tv'),
-        getByGenreServer(10749, 'movie'), getByGenreServer(10749, 'tv'),
-        getByGenreServer(10752, 'movie'), getByGenreServer(10768, 'tv')
-      ]);
-
-      let enrichedTrending = trending || [];
-      if (enrichedTrending.length > 0) {
-        const top10 = enrichedTrending.slice(0, 10);
-        // Sequential / buffered enrichment to avoid hitting limits too hard
-        const enriched = [];
-        for (const m of top10) {
-          const detail = await getMovieDetailsServer(m.id, m.contentType);
-          if (detail) enriched.push(detail);
-        }
-        const validEnriched = enriched.filter(Boolean);
-        enrichedTrending = [...validEnriched, ...enrichedTrending.slice(top10.length)];
-      }
-
-      const payload = {
-        trending: enrichedTrending || [],
-        popular: popular || [],
-        netflix: netflix || [],
-        latest: latest || [],
-        topRated: topRated || [],
-        jioHotstar: jioHotstar || [],
-        primeVideo: primeVideo || [],
-        action: uniqueByIdServer([...(actionMovies || []), ...(actionTV || [])]),
-        comedy: uniqueByIdServer([...(comedyMovies || []), ...(comedyTV || [])]),
-        drama: uniqueByIdServer([...(dramaMovies || []), ...(dramaTV || [])]),
-        romance: uniqueByIdServer([...(romanceMovies || []), ...(romanceTV || [])]),
-        war: uniqueByIdServer([...(warMovies || []), ...(warTV || [])])
-      };
-
-      cachedHomePayload = payload;
-      cachedHomeTimestamp = Date.now();
-      console.log("[Server TMDB] Unified home feed compiled successfully! Cached.");
-      return payload;
-    } catch (e: any) {
-      console.error("[Server TMDB Compile Error] Failed:", e.message);
-      throw e;
-    } finally {
-      isPrewarming = false;
-    }
-  }
-
-  // Prewarm trigger inside startServer
-  setTimeout(() => {
-    compileHomePayload().catch((err) => {
-      console.error("[Server TMDB] Background prewarm failed:", err.message);
-    });
-  }, 4000); // 4 seconds buffer after server boot
-
-  // Compiled Content Home Endpoint
-  app.get("/api/content/home", async (req, res) => {
-    try {
-      if (cachedHomePayload && (Date.now() - cachedHomeTimestamp < HOME_CACHE_TTL)) {
-        console.log("[TMDB CACHE] Served aggregated home catalog from server memory in 1ms");
-        return res.json(cachedHomePayload);
-      }
-      
-      const payload = await compileHomePayload();
-      res.json(payload);
-    } catch (error: any) {
-      console.error("[TMDB CACHE] Failed to compile home feed:", error.message);
-      if (cachedHomePayload) {
-        console.warn("[TMDB CACHE] Serving stale home feed copy");
-        return res.json(cachedHomePayload);
-      }
-      res.status(500).json({ error: "Failed to compile home titles", details: error.message });
-    }
-  });
-
-  // API Route for TMDB Proxy with Dual Catch/Cache layers
+  // API Route for TMDB Proxy
   app.get("/api/tmdb/*", async (req, res) => {
-    const cacheKey = req.originalUrl;
-    
-    // Check in cache first
-    const cachedEntry = generalTmdbCache.get(cacheKey);
-    if (cachedEntry && (Date.now() - cachedEntry.timestamp < GENERAL_CACHE_TTL)) {
-      console.log(`[TMDB CACHE] Served proxy endpoint directly from memory cache: ${cacheKey}`);
-      return res.json(cachedEntry.data);
-    }
-
     const tmdbKey = process.env.TMDB_API_KEY;
     const viteTmdbKey = process.env.VITE_TMDB_API_KEY;
+    
+    // Trim and sanitize key
     let effectiveKey = (tmdbKey || viteTmdbKey || "").trim();
     
     if (!effectiveKey) {
@@ -749,20 +339,23 @@ async function startServer() {
     const query = req.query;
     
     try {
+      // TMDB v3 keys are exactly 32 hex chars. v4 tokens are much longer.
       const isBearer = effectiveKey.length > 40 || effectiveKey.startsWith('ey');
       const headers: any = {
         'Accept': 'application/json',
         'User-Agent': 'CineStream-App'
       };
-
+      
       let url = `https://api.themoviedb.org/3/${path}`;
       
       if (isBearer) {
+        // Use v4 Bearer Token auth
         const token = effectiveKey.replace(/^Bearer\s+/i, '');
         headers['Authorization'] = `Bearer ${token}`;
         const queryString = new URLSearchParams(query as any).toString();
         if (queryString) url += `?${queryString}`;
       } else {
+        // Use v3 api_key query param
         const queryString = new URLSearchParams({
           ...query as any,
           api_key: effectiveKey
@@ -774,11 +367,9 @@ async function startServer() {
 
       const response = await axios.get(url, { 
         headers,
-        timeout: 30000 
+        timeout: 30000 // Increased timeout to 30s for slower networks
       });
       
-      // Store in memory cache
-      generalTmdbCache.set(cacheKey, { data: response.data, timestamp: Date.now() });
       res.json(response.data);
     } catch (error: any) {
       const status = error.response?.status || 500;
