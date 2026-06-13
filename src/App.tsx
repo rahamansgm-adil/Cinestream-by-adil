@@ -56,19 +56,35 @@ export default function App() {
     playingMovieRef.current = playingMovie;
   }, [playingMovie]);
 
-  // Message listener for external players (Vidking)
+  // Message listener for external players (Vidking + Vidlink)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      // Handle the VidLink.pro local storage progress saving requirement
+      if (event.origin === 'https://vidlink.pro') {
+        if (event.data?.type === 'MEDIA_DATA') {
+          const mediaData = event.data.data;
+          localStorage.setItem('vidLinkProgress', JSON.stringify(mediaData));
+        }
+      }
+
       if (!playingMovieRef.current || !user) return;
       
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         console.log("[App] Player Message:", data);
 
-        // Standard progress message format (Vidking/Common players)
-        // We look for time (currentTime) and duration
-        const currentTime = data.currentTime || data.time || (data.data?.time);
-        const duration = data.duration || (data.data?.duration);
+        let currentTime: number | undefined;
+        let duration: number | undefined;
+
+        // Extract timing properties appropriately based on the event origin & type
+        if (event.origin === 'https://vidlink.pro' && data?.type === 'MEDIA_DATA' && data?.data) {
+          currentTime = data.data.currentTime;
+          duration = data.data.duration;
+        } else {
+          // Standard progress message format (Vidking/Common players)
+          currentTime = data.currentTime || data.time || (data.data?.time);
+          duration = data.duration || (data.data?.duration);
+        }
 
         if (currentTime !== undefined && duration !== undefined) {
           const currentMovie = playingMovieRef.current;
@@ -487,6 +503,7 @@ export default function App() {
     const isLive = playingMovie.rating === 'LIVE';
     
     return url.includes('vidking.net') || 
+           url.includes('vidlink.pro') || 
            url.includes('youtube.com/embed') || 
            url.includes('vimeo.com/video') ||
            url.includes('mhdtvhub.com') ||
@@ -916,7 +933,7 @@ export default function App() {
               {isEmbed ? (
                 <div className="w-full h-full relative">
                   <iframe 
-                    src={playingMovie.videoUrl.startsWith('/') ? `https://www.vidking.net${playingMovie.videoUrl}` : playingMovie.videoUrl} 
+                    src={playingMovie.videoUrl.startsWith('/') ? `https://vidlink.pro${playingMovie.videoUrl}` : playingMovie.videoUrl} 
                     className="w-full h-full border-0"
                     allowFullScreen
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture; xr-spatial-tracking; clipboard-write; gyroscope; accelerometer; microphone; camera"

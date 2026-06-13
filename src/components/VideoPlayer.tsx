@@ -75,7 +75,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
   useEffect(() => {
     let firstSource = options?.sources?.[0]?.src || '';
     if (firstSource.startsWith('/')) {
-      firstSource = `https://www.vidking.net${firstSource}`;
+      firstSource = `https://vidlink.pro${firstSource}`;
     }
 
     if (firstSource.includes('vidking.net') && !firstSource.includes('autoPlay=')) {
@@ -85,6 +85,7 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
 
     const isIframe = firstSource.includes('vidking.net') || 
                      firstSource.includes('vidking.com') || 
+                     firstSource.includes('vidlink.pro') || 
                      firstSource.includes('mhdtvhub.com') ||
                      firstSource.includes('mhdtvlive.com') ||
                      firstSource.includes('mhdtv-world.com') ||
@@ -99,6 +100,21 @@ export const VideoPlayer = ({ options, onReady, onBack }: VideoPlayerProps) => {
       setIframeUrl(null);
     }
   }, [options]);
+
+  // Handle continue watching events from VidLink player
+  useEffect(() => {
+    const handleVidLinkMessage = (event: MessageEvent) => {
+      if (event.origin !== 'https://vidlink.pro') return;
+      
+      if (event.data?.type === 'MEDIA_DATA') {
+        const mediaData = event.data.data;
+        localStorage.setItem('vidLinkProgress', JSON.stringify(mediaData));
+      }
+    };
+
+    window.addEventListener('message', handleVidLinkMessage);
+    return () => window.removeEventListener('message', handleVidLinkMessage);
+  }, []);
 
   // Main Live Stream / Progressive Stream Loading logic (Video.js)
   useEffect(() => {

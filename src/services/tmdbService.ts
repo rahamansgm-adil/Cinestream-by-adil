@@ -66,7 +66,9 @@ export const tmdbService = {
       description: tmdbItem.overview || 'No description available.',
       thumbnailUrl: tmdbItem.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbItem.poster_path}` : 'https://via.placeholder.com/500x750',
       bannerUrl: tmdbItem.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdbItem.backdrop_path}` : 'https://via.placeholder.com/1920x1080',
-      videoUrl: isTV ? `https://www.vidking.net/embed/tv/${tmdbItem.id}/1/1?autoPlay=true&nextEpisode=true&episodeSelector=true` : `https://www.vidking.net/embed/movie/${tmdbItem.id}?autoPlay=true&nextEpisode=true&episodeSelector=true`,
+      videoUrl: isTV 
+        ? `https://vidlink.pro/tv/${tmdbItem.id}/1/1?primaryColor=63b8bc&secondaryColor=a2a2a2&iconColor=eefdec&icons=default&player=jw&title=true&poster=true&autoplay=true&nextbutton=true` 
+        : `https://vidlink.pro/movie/${tmdbItem.id}?primaryColor=63b8bc&secondaryColor=a2a2a2&iconColor=eefdec&icons=default&player=jw&title=true&poster=true&autoplay=true&nextbutton=true`,
       duration: isTV ? 'Series' : 'Feature',
       year: (tmdbItem.release_date || tmdbItem.first_air_date || '').split('-')[0] || 'Unknown',
       rating: String(tmdbItem.vote_average || 'NR'),
@@ -222,7 +224,7 @@ export const tmdbService = {
       description: ep.overview,
       duration: ep.runtime ? `${ep.runtime}m` : '45m',
       thumbnailUrl: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : null,
-      videoUrl: `https://www.vidking.net/embed/tv/${tvId}/${ep.season_number}/${ep.episode_number}?autoPlay=true&nextEpisode=true&episodeSelector=true`
+      videoUrl: `https://vidlink.pro/tv/${tvId}/${ep.season_number}/${ep.episode_number}?primaryColor=63b8bc&secondaryColor=a2a2a2&iconColor=eefdec&icons=default&player=jw&title=true&poster=true&autoplay=true&nextbutton=true`
     }));
   },
 
